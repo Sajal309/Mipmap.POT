@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spine Mipmap Preview</title>
-    <script type="module" crossorigin src="/assets/index-BmmuqWpu.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-HqxyUVXT.css">
+    <script type="module" crossorigin src="/assets/index-B7s4LLbH.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-FxUtH3r8.css">
   </head>
   <body>
     <div class="app-shell">
@@ -15,10 +15,8 @@
           <p class="eyebrow">AI-POWERED • MODEL 002</p>
         </header>
 
-        <section class="card card-priority" aria-labelledby="uploadTitle">
-          <div class="card-head">
-            <h2 id="uploadTitle">Upload</h2>
-          </div>
+        <details class="card card-priority">
+          <summary>Upload</summary>
           <fieldset class="field-group" aria-describedby="requiredHint">
             <legend>Required</legend>
             <p id="requiredHint" class="assistive">Add all required files.</p>
@@ -46,36 +44,28 @@
           <button id="addButton" type="button">Load</button>
           <p id="loadStatus" class="status-line">Waiting for files.</p>
           <div id="warnings" class="warnings" role="status" aria-live="polite"></div>
-        </section>
+        </details>
 
-        <section class="card" aria-labelledby="historyTitle">
-          <div class="card-head">
-            <h2 id="historyTitle">History</h2>
-          </div>
+        <details class="card" open>
+          <summary>History</summary>
           <p id="historyStatus" class="status-line">Loading...</p>
           <ul id="historyList" class="list history-list"></ul>
-        </section>
+        </details>
 
-        <section class="card" aria-labelledby="animationTitle">
-          <div class="card-head">
-            <h2 id="animationTitle">Animations</h2>
-          </div>
+        <details class="card" open>
+          <summary>Animations</summary>
           <ul id="animationList" class="list"></ul>
-        </section>
+        </details>
 
-        <section class="card" aria-labelledby="boneTitle">
-          <div class="card-head">
-            <h2 id="boneTitle">Bones</h2>
-          </div>
+        <details class="card">
+          <summary>Bones</summary>
           <ul id="boneList" class="list"></ul>
-        </section>
+        </details>
 
-        <section class="card" aria-labelledby="slotTitle">
-          <div class="card-head">
-            <h2 id="slotTitle">Slots</h2>
-          </div>
+        <details class="card">
+          <summary>Slots</summary>
           <ul id="slotList" class="list"></ul>
-        </section>
+        </details>
       </aside>
 
       <main class="stage-wrap" aria-label="Preview stage">
@@ -92,56 +82,13 @@
 
       <aside class="panel panel-right" aria-label="Diagnostics and testing">
         <header class="panel-header compact">
-          <h2>Tests</h2>
+          <h2>Screen Test</h2>
         </header>
 
-        <section class="card statuses" aria-labelledby="statusTitle">
-          <div class="card-head">
-            <h3 id="statusTitle">Status</h3>
-          </div>
-          <p id="potStatus" class="status-line">Texture POT: -</p>
-          <p id="renderResolutionTag" class="badge badge-neutral">Render: unknown</p>
-          <p id="mipEstimateTag" class="badge badge-neutral">Mip estimate: unknown</p>
-          <p id="mipActiveTag" class="badge badge-neutral">Active mip: unknown</p>
-          <p id="perfTag" class="badge badge-neutral">Perf: unknown</p>
-          <p id="mipmapBadge" class="badge badge-neutral">Mipmaps status: unknown</p>
-          <pre id="verificationPanel" class="panel-log">No GL verification yet.</pre>
-        </section>
-
-        <section class="card controls" aria-labelledby="mipmapTitle">
-          <div class="card-head">
-            <h3 id="mipmapTitle">Mipmap</h3>
-          </div>
-          <label class="toggle">
-            <input id="mipmapToggle" type="checkbox" checked />
-            <span>Enable mipmaps</span>
-          </label>
-          <label class="toggle">
-            <input id="potOverrideToggle" type="checkbox" />
-            <span>Manual POT</span>
-          </label>
-          <div class="pot-row">
-            <label class="field compact">
-              <span>Width</span>
-              <input id="potWidthInput" type="number" min="1" step="1" placeholder="2048" />
-            </label>
-            <label class="field compact">
-              <span>Height</span>
-              <input id="potHeightInput" type="number" min="1" step="1" placeholder="2048" />
-            </label>
-          </div>
-          <div class="button-row">
-            <button id="scale025" type="button">0.25x</button>
-            <button id="scale05" type="button">0.5x</button>
-            <button id="scale10" type="button">1.0x</button>
-          </div>
-          <button id="panToggle" type="button">Pan: OFF</button>
-        </section>
-
-        <section class="card controls" aria-labelledby="deviceTitle">
-          <div class="card-head">
-            <h3 id="deviceTitle">Device</h3>
-          </div>
+        <details class="card controls device-focus" open>
+          <summary>Device Compare (Primary)</summary>
+          <p class="focus-note">Use this first to preview small screens and compare POT/NPOT behavior with mipmaps.</p>
+          <p class="focus-tags"><span>Small screen</span><span>POT vs NPOT</span><span>Mipmap check</span></p>
           <label class="field compact">
             <span>Profile</span>
             <select id="deviceProfileSelect">
@@ -187,15 +134,47 @@
               <option value="20">20</option>
             </select>
           </label>
-        </section>
+        </details>
 
-        <section class="card" aria-labelledby="logsTitle">
-          <div class="card-head">
-            <h3 id="logsTitle">Logs</h3>
-            <button id="clearLogsButton" type="button" class="tertiary">Clear</button>
+        <details class="card controls" open>
+          <summary>Mipmap</summary>
+          <label class="toggle">
+            <input id="mipmapToggle" type="checkbox" checked />
+            <span>Enable mipmaps</span>
+          </label>
+          <label class="toggle">
+            <input id="potOverrideToggle" type="checkbox" />
+            <span>Manual POT</span>
+          </label>
+          <div class="pot-row">
+            <label class="field compact">
+              <span>Width</span>
+              <input id="potWidthInput" type="number" min="1" step="1" placeholder="2048" />
+            </label>
+            <label class="field compact">
+              <span>Height</span>
+              <input id="potHeightInput" type="number" min="1" step="1" placeholder="2048" />
+            </label>
           </div>
-          <ul id="logsPanel" class="log-list" aria-live="polite"></ul>
-        </section>
+          <div class="button-row">
+            <button id="scale025" type="button">0.25x</button>
+            <button id="scale05" type="button">0.5x</button>
+            <button id="scale10" type="button">1.0x</button>
+          </div>
+          <button id="panToggle" type="button">Pan: OFF</button>
+        </details>
+
+        <details class="card statuses" open>
+          <summary>Status</summary>
+          <p id="potStatus" class="status-line">Texture POT: -</p>
+          <p id="renderResolutionTag" class="badge badge-neutral">Render: unknown</p>
+          <p id="mipEstimateTag" class="badge badge-neutral">Mip estimate: unknown</p>
+          <p id="mipActiveTag" class="badge badge-neutral">Active mip: unknown</p>
+          <p id="perfTag" class="badge badge-neutral">Perf: unknown</p>
+          <p id="mipmapBadge" class="badge badge-neutral">Mipmaps status: unknown</p>
+          <pre id="verificationPanel" class="panel-log">No GL verification yet.</pre>
+        </details>
+
       </aside>
     </div>
 

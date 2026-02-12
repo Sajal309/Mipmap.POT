@@ -146,6 +146,7 @@ const state = {
   historySupported: typeof indexedDB !== 'undefined',
   historyRecords: [],
   historyPreviewUrls: [],
+  activeHistoryRecordId: null,
   viewportBaseScale: 1,
   activeDeviceProfileId: 'custom',
   simulatedCpuThrottleMs: 0,
@@ -339,16 +340,24 @@ function createHistoryRow(record) {
   const thumb = document.createElement('div');
   const thumbImage = document.createElement('img');
   const content = document.createElement('div');
+  const headerRow = document.createElement('div');
   const actions = document.createElement('div');
   const loadButton = document.createElement('button');
   const deleteButton = document.createElement('button');
   const meta = document.createElement('div');
+  const activeBadge = document.createElement('span');
 
   thumb.className = 'history-thumb';
   content.className = 'history-content';
+  headerRow.className = 'history-header';
   actions.className = 'history-actions';
   deleteButton.className = 'history-delete';
   meta.className = 'history-meta';
+  activeBadge.className = 'history-active-badge';
+  activeBadge.textContent = 'Active';
+  if (record.id === state.activeHistoryRecordId) {
+    activeBadge.classList.add('is-active');
+  }
 
   const previewUrl = createHistoryPreviewUrl(record);
   thumbImage.alt = `${record.name || 'character'} thumbnail`;
@@ -387,7 +396,10 @@ function createHistoryRow(record) {
         ? getHistoryFile(fullRecord.animationsFile, fullRecord.animationsName || 'animations.json', 'application/json')
         : null;
 
-      await loadSpineBundle({ imageFiles, atlasFile, jsonFile, animationsFile }, { saveHistory: false });
+      await loadSpineBundle(
+        { imageFiles, atlasFile, jsonFile, animationsFile },
+        { saveHistory: false, activeHistoryRecordId: fullRecord.id }
+      );
     } catch (error) {
       console.error(error);
       setLoadStatus(error.message || 'Failed to load history entry.', 'error');
@@ -398,6 +410,9 @@ function createHistoryRow(record) {
   deleteButton.textContent = 'Delete';
   deleteButton.addEventListener('click', async () => {
     try {
+      if (state.activeHistoryRecordId === record.id) {
+        state.activeHistoryRecordId = null;
+      }
       await deleteHistoryRecord(record.id);
       await refreshHistoryList();
       setLoadStatus(`Deleted history entry: ${record.name}`);
@@ -410,7 +425,9 @@ function createHistoryRow(record) {
   meta.textContent = `${record.imageCount || 0} image(s) • ${toDisplayDate(record.createdAt)}`;
   actions.appendChild(loadButton);
   actions.appendChild(deleteButton);
-  content.appendChild(actions);
+  headerRow.appendChild(actions);
+  headerRow.appendChild(activeBadge);
+  content.appendChild(headerRow);
   content.appendChild(meta);
   item.appendChild(thumb);
   item.appendChild(content);
@@ -764,7 +781,7 @@ function updateWorldPosition() {
   const height = dom.pixiHost.clientHeight;
 
   world.x = width * 0.5 + state.dragOffsetX + state.panOffsetX;
-  world.y = height * 0.62 + state.dragOffsetY;
+  world.y = height * 0.5 + state.dragOffsetY;
 }
 
 function applyWorldScale() {
@@ -842,7 +859,7 @@ function populateSlotList(spineObject) {
 function positionSpineAtCenter(spineObject) {
   const localBounds = spineObject.getLocalBounds();
   spineObject.x = -localBounds.x - localBounds.width * 0.5;
-  spineObject.y = -localBounds.y - localBounds.height;
+  spineObject.y = -localBounds.y - localBounds.height * 0.5;
 }
 
 function getGlTextureObject(baseTexture) {
@@ -1330,21 +1347,12 @@ function updatePerfTag() {
 }
 
 function updateDebugOverlay() {
-  const gl = app.renderer.gl;
-  const webglVersion = app.renderer.context.webGLVersion === 2 ? 'WebGL2' : 'WebGL1';
-  const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
   const renderInfo = getRenderResolutionInfo();
-  const mipEstimate = computeMipEstimate();
   const primaryPage = getPrimaryAtlasPage();
-  const fps = 1000 / Math.max(0.0001, state.frameMsEwma);
   const profile = getActiveDeviceProfile();
   const profileName = profile.id === 'custom' ? 'Custom (host)' : profile.label;
-  const refreshTarget = app.ticker.maxFPS > 0 ? app.ticker.maxFPS : profile.refreshHz || 'uncapped';
-
-  const samplingStatus = state.lastVerification?.samplingEnabled ? 'ENABLED (sampling)' : 'OFF/UNCONFIRMED';
-  const potSummary = state.pages.length
-    ? state.pages.map((page) => `${page.atlasName}:${page.isPOT ? 'POT' : 'NPOT'}`).join(', ')
-    : '-';
+  const samplingStatus = state.lastVerification?.samplingEnabled ? 'YES' : 'NO';
+  const activeMipSummary = dom.mipActiveTag.textContent.replace(/^Active mip:\s*/, '');
 
   updateRenderResolutionTag();
   updateMipEstimateTag();
@@ -1352,26 +1360,12 @@ function updateDebugOverlay() {
   updatePerfTag();
 
   dom.debugOverlay.textContent = [
-    `WebGL: ${webglVersion}`,
-    `Max Texture Size: ${maxTextureSize}`,
-    `Device Profile: ${profileName}`,
-    `Host DPR: ${window.devicePixelRatio || 1}`,
-    `Emulated DPR: ${renderInfo.resolution.toFixed(2)}`,
-    `CPU Throttle: +${state.simulatedCpuThrottleMs.toFixed(1)}ms/frame`,
-    `Viewport Preset: ${dom.viewportPreset.value}`,
-    `Render Scale Mode: ${dom.renderScaleSelect.value}`,
-    `Refresh Target: ${refreshTarget}`,
-    `Render Resolution: ${renderInfo.renderWidth}x${renderInfo.renderHeight} @${renderInfo.resolution.toFixed(2)}x`,
-    `CSS Viewport: ${renderInfo.cssWidth}x${renderInfo.cssHeight}`,
-    `Frame: ${state.frameMsEwma.toFixed(1)}ms (${fps.toFixed(1)} FPS)`,
-    `Mip Estimate: ${mipEstimate ? `L${mipEstimate.estimatedLevel.toFixed(2)} (${mipEstimate.texelsPerPixel.toFixed(2)} texel/px)` : 'n/a'}`,
-    `Active Mip Tag: ${dom.mipActiveTag.textContent.replace(/^Active mip:\\s*/, '')}`,
-    `Primary Atlas Page: ${primaryPage ? `${primaryPage.atlasName} (${primaryPage.width}x${primaryPage.height})` : 'n/a'}`,
-    `Current Zoom: ${state.zoom.toFixed(2)}x`,
-    `Current Skeleton Scale: ${state.spineObject ? state.spineObject.scale.x.toFixed(2) : 'n/a'}`,
-    `POT: ${potSummary}`,
-    `Mipmaps: ${samplingStatus}`,
-    `NPOT warnings: ${state.npotWarnings.length ? state.npotWarnings.join(' | ') : 'none'}`
+    `Profile: ${profileName}`,
+    `Viewport: ${renderInfo.cssWidth}x${renderInfo.cssHeight} @${renderInfo.resolution.toFixed(2)}x`,
+    `Mipmaps Active (sampling): ${samplingStatus}`,
+    `Current Mip: ${activeMipSummary}`,
+    `Primary Atlas: ${primaryPage ? `${primaryPage.atlasName} (${primaryPage.width}x${primaryPage.height})` : 'n/a'}`,
+    `POT Eligibility: ${state.pages.length ? (state.pages.every((page) => page.isPOT) ? 'All POT' : 'Has NPOT (limited)') : 'n/a'}`
   ].join('\n');
 }
 
@@ -1565,12 +1559,14 @@ async function saveBundleToHistory(bundle) {
   };
 
   await saveHistoryRecord(record);
-  await refreshHistoryList();
+  return id;
 }
 
 async function loadSpineBundle(bundle, options = {}) {
   setLoadStatus('Loading files...');
   setWarnings([]);
+  const requestedActiveHistoryId =
+    Object.prototype.hasOwnProperty.call(options, 'activeHistoryRecordId') ? options.activeHistoryRecordId : undefined;
 
   cleanupCurrentSpine();
   revokeTrackedObjectUrls();
@@ -1700,12 +1696,14 @@ async function loadSpineBundle(bundle, options = {}) {
     state.spineObject = spineObject;
     world.addChild(spineObject);
 
+    populateAnimationList(spineObject);
+    // Apply animation selection first, then center from current pose bounds.
+    spineObject.update(0);
     positionSpineAtCenter(spineObject);
     fitSpineToViewport();
     setZoom(1);
     updateWorldPosition();
 
-    populateAnimationList(spineObject);
     populateBoneList(spineObject);
     populateSlotList(spineObject);
     updatePotStatus();
@@ -1716,7 +1714,9 @@ async function loadSpineBundle(bundle, options = {}) {
       state.requestedMipmaps = false;
     } else {
       dom.mipmapToggle.disabled = false;
-      state.requestedMipmaps = dom.mipmapToggle.checked;
+      // Restore default behavior: auto-enable mipmaps whenever textures support it.
+      dom.mipmapToggle.checked = true;
+      state.requestedMipmaps = true;
     }
 
     const warningMessages = [...mapping.warnings, ...potOverrideWarnings, ...state.npotWarnings];
@@ -1726,11 +1726,17 @@ async function loadSpineBundle(bundle, options = {}) {
     setWarnings(warningMessages);
 
     await applyMipmapsAndVerify();
+    if (requestedActiveHistoryId !== undefined) {
+      state.activeHistoryRecordId = requestedActiveHistoryId;
+      await refreshHistoryList();
+    }
     setLoadStatus(`Loaded Spine with ${pages.length} atlas page(s).`);
 
     if (options.saveHistory) {
       try {
-        await saveBundleToHistory(bundle);
+        const savedId = await saveBundleToHistory(bundle);
+        state.activeHistoryRecordId = savedId;
+        await refreshHistoryList();
       } catch (historyError) {
         console.error(historyError);
         setHistoryStatus(historyError.message || 'Failed to save history record.', 'error');
