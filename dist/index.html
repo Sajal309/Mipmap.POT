@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spine Mipmap Preview</title>
+    <script type="module" crossorigin src="/assets/index-BmmuqWpu.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-HqxyUVXT.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="panel panel-left" aria-label="Primary controls">
+        <header class="panel-header">
+          <h1>SPINE PREVIEW</h1>
+          <p class="eyebrow">AI-POWERED • MODEL 002</p>
+        </header>
+
+        <section class="card card-priority" aria-labelledby="uploadTitle">
+          <div class="card-head">
+            <h2 id="uploadTitle">Upload</h2>
+          </div>
+          <fieldset class="field-group" aria-describedby="requiredHint">
+            <legend>Required</legend>
+            <p id="requiredHint" class="assistive">Add all required files.</p>
+            <label class="field">
+              <span>Images (.png)</span>
+              <input id="imageInput" type="file" accept=".png,image/png" multiple required />
+            </label>
+            <label class="field">
+              <span>Atlas (.atlas)</span>
+              <input id="atlasInput" type="file" accept=".atlas,text/plain" required />
+            </label>
+            <label class="field">
+              <span>Skeleton (.json/.skel)</span>
+              <input id="jsonInput" type="file" accept=".json,application/json,application/octet-stream" required />
+            </label>
+          </fieldset>
+          <fieldset class="field-group">
+            <legend>Optional</legend>
+            <label class="field">
+              <span>Animations</span>
+              <input id="animationsInput" type="file" accept=".json,application/json" />
+            </label>
+          </fieldset>
+
+          <button id="addButton" type="button">Load</button>
+          <p id="loadStatus" class="status-line">Waiting for files.</p>
+          <div id="warnings" class="warnings" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="card" aria-labelledby="historyTitle">
+          <div class="card-head">
+            <h2 id="historyTitle">History</h2>
+          </div>
+          <p id="historyStatus" class="status-line">Loading...</p>
+          <ul id="historyList" class="list history-list"></ul>
+        </section>
+
+        <section class="card" aria-labelledby="animationTitle">
+          <div class="card-head">
+            <h2 id="animationTitle">Animations</h2>
+          </div>
+          <ul id="animationList" class="list"></ul>
+        </section>
+
+        <section class="card" aria-labelledby="boneTitle">
+          <div class="card-head">
+            <h2 id="boneTitle">Bones</h2>
+          </div>
+          <ul id="boneList" class="list"></ul>
+        </section>
+
+        <section class="card" aria-labelledby="slotTitle">
+          <div class="card-head">
+            <h2 id="slotTitle">Slots</h2>
+          </div>
+          <ul id="slotList" class="list"></ul>
+        </section>
+      </aside>
+
+      <main class="stage-wrap" aria-label="Preview stage">
+        <div id="deviceFrame" class="device-frame mode-auto">
+          <div class="device-shell">
+            <div class="device-cutout"></div>
+            <div id="pixiHost" class="pixi-host"></div>
+            <div class="device-home-indicator"></div>
+          </div>
+          <div class="device-laptop-base"></div>
+        </div>
+        <div id="debugOverlay" class="debug-overlay"></div>
+      </main>
+
+      <aside class="panel panel-right" aria-label="Diagnostics and testing">
+        <header class="panel-header compact">
+          <h2>Tests</h2>
+        </header>
+
+        <section class="card statuses" aria-labelledby="statusTitle">
+          <div class="card-head">
+            <h3 id="statusTitle">Status</h3>
+          </div>
+          <p id="potStatus" class="status-line">Texture POT: -</p>
+          <p id="renderResolutionTag" class="badge badge-neutral">Render: unknown</p>
+          <p id="mipEstimateTag" class="badge badge-neutral">Mip estimate: unknown</p>
+          <p id="mipActiveTag" class="badge badge-neutral">Active mip: unknown</p>
+          <p id="perfTag" class="badge badge-neutral">Perf: unknown</p>
+          <p id="mipmapBadge" class="badge badge-neutral">Mipmaps status: unknown</p>
+          <pre id="verificationPanel" class="panel-log">No GL verification yet.</pre>
+        </section>
+
+        <section class="card controls" aria-labelledby="mipmapTitle">
+          <div class="card-head">
+            <h3 id="mipmapTitle">Mipmap</h3>
+          </div>
+          <label class="toggle">
+            <input id="mipmapToggle" type="checkbox" checked />
+            <span>Enable mipmaps</span>
+          </label>
+          <label class="toggle">
+            <input id="potOverrideToggle" type="checkbox" />
+            <span>Manual POT</span>
+          </label>
+          <div class="pot-row">
+            <label class="field compact">
+              <span>Width</span>
+              <input id="potWidthInput" type="number" min="1" step="1" placeholder="2048" />
+            </label>
+            <label class="field compact">
+              <span>Height</span>
+              <input id="potHeightInput" type="number" min="1" step="1" placeholder="2048" />
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="scale025" type="button">0.25x</button>
+            <button id="scale05" type="button">0.5x</button>
+            <button id="scale10" type="button">1.0x</button>
+          </div>
+          <button id="panToggle" type="button">Pan: OFF</button>
+        </section>
+
+        <section class="card controls" aria-labelledby="deviceTitle">
+          <div class="card-head">
+            <h3 id="deviceTitle">Device</h3>
+          </div>
+          <label class="field compact">
+            <span>Profile</span>
+            <select id="deviceProfileSelect">
+              <option value="custom" selected>Custom (manual)</option>
+              <option value="small-phone">Small phone - iPhone SE (2022)</option>
+              <option value="big-phone">Big phone - iPhone 15 Pro Max</option>
+              <option value="tablet">Tablet - iPad Air 10.9&quot;</option>
+              <option value="laptop">Laptop - 13&quot; 1366x768</option>
+            </select>
+          </label>
+          <p id="deviceProfileStatus" class="hint">Custom mode.</p>
+          <label class="field compact">
+            <span>Viewport</span>
+            <select id="viewportPreset">
+              <option value="auto" selected>Auto</option>
+              <option value="390x844">Phone 390x844</option>
+              <option value="430x932">Phone 430x932</option>
+              <option value="375x667">Phone 375x667</option>
+              <option value="360x640">Phone 360x640</option>
+              <option value="820x1180">Tablet 820x1180</option>
+              <option value="768x1024">Tablet 768x1024</option>
+              <option value="1366x768">Laptop 1366x768</option>
+            </select>
+          </label>
+          <label class="field compact">
+            <span>Render scale</span>
+            <select id="renderScaleSelect">
+              <option value="dpr">Device DPR</option>
+              <option value="1">1.0x</option>
+              <option value="2">2.0x</option>
+              <option value="3">3.0x</option>
+              <option value="0.75">0.75x</option>
+              <option value="0.5">0.5x</option>
+            </select>
+          </label>
+          <label class="field compact">
+            <span>FPS</span>
+            <select id="fpsCapSelect">
+              <option value="0">Uncapped</option>
+              <option value="120">120</option>
+              <option value="60">60</option>
+              <option value="30">30</option>
+              <option value="20">20</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="card" aria-labelledby="logsTitle">
+          <div class="card-head">
+            <h3 id="logsTitle">Logs</h3>
+            <button id="clearLogsButton" type="button" class="tertiary">Clear</button>
+          </div>
+          <ul id="logsPanel" class="log-list" aria-live="polite"></ul>
+        </section>
+      </aside>
+    </div>
+
+  </body>
+</html>
