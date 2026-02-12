@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spine Mipmap Preview</title>
-    <script type="module" crossorigin src="/assets/index-B7s4LLbH.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-FxUtH3r8.css">
+    <script type="module" crossorigin src="/assets/index-cGsafmGp.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Dcsq4ehC.css">
   </head>
   <body>
     <div class="app-shell">
@@ -72,7 +72,12 @@
         <div id="deviceFrame" class="device-frame mode-auto">
           <div class="device-shell">
             <div class="device-cutout"></div>
-            <div id="pixiHost" class="pixi-host"></div>
+            <div id="pixiHost" class="pixi-host">
+              <div class="screen-zoom-controls" aria-label="Emulator screen zoom controls">
+                <button id="localZoomOut" type="button" aria-label="Zoom out emulator screen">-</button>
+                <button id="localZoomIn" type="button" aria-label="Zoom in emulator screen">+</button>
+              </div>
+            </div>
             <div class="device-home-indicator"></div>
           </div>
           <div class="device-laptop-base"></div>

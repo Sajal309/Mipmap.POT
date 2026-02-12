@@ -576,8 +576,10 @@ button:hover {
 }
 
 .pixi-host {
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   background-color: #10161f;
   background-image:
     radial-gradient(circle at 1px 1px, #202a3c 1.1px, transparent 1.2px),
@@ -590,6 +592,42 @@ button:hover {
   width: 100%;
   height: 100%;
   display: block;
+  transform-origin: center center;
+  transition: transform 140ms ease;
+}
+
+.screen-zoom-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.screen-zoom-controls button {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid rgba(178, 201, 237, 0.52);
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #f0f7ff;
+  background: rgba(9, 13, 20, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.screen-zoom-controls button:hover {
+  background: rgba(28, 39, 57, 0.85);
+}
+
+.screen-zoom-controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  background: rgba(9, 13, 20, 0.55);
 }
 
 .device-frame.mode-auto {

@@ -68,6 +68,7 @@ const DEVICE_PROFILES = [
     notes: 'Mainstream laptop class baseline.'
   }
 ];
+const LOCAL_SCREEN_ZOOM_STEP = 1.2;
 
 const dom = {
   imageInput: document.getElementById('imageInput'),
@@ -107,7 +108,9 @@ const dom = {
   debugOverlay: document.getElementById('debugOverlay'),
   deviceFrame: document.getElementById('deviceFrame'),
   stageWrap: document.querySelector('.stage-wrap'),
-  pixiHost: document.getElementById('pixiHost')
+  pixiHost: document.getElementById('pixiHost'),
+  localZoomIn: document.getElementById('localZoomIn'),
+  localZoomOut: document.getElementById('localZoomOut')
 };
 
 const app = new PIXI.Application({
@@ -148,6 +151,7 @@ const state = {
   historyPreviewUrls: [],
   activeHistoryRecordId: null,
   viewportBaseScale: 1,
+  localScreenZoom: 1,
   activeDeviceProfileId: 'custom',
   simulatedCpuThrottleMs: 0,
   applyingDeviceProfile: false,
@@ -813,6 +817,20 @@ function setZoom(scale) {
   updateDebugOverlay();
 }
 
+function applyLocalScreenZoom() {
+  app.view.style.transform = `scale(${state.localScreenZoom})`;
+}
+
+function setLocalScreenZoom(scale) {
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return;
+  }
+
+  state.localScreenZoom = scale;
+  applyLocalScreenZoom();
+  updateDebugOverlay();
+}
+
 function populateAnimationList(spineObject) {
   dom.animationList.innerHTML = '';
 
@@ -1002,6 +1020,7 @@ function runGlVerification() {
     `MAX_TEXTURE_SIZE: ${maxTextureSize}`,
     `DPR: ${window.devicePixelRatio || 1}`,
     `Zoom: ${state.zoom.toFixed(2)}x`,
+    `Screen zoom: ${state.localScreenZoom.toFixed(2)}x`,
     `Skeleton scale: ${state.spineObject ? state.spineObject.scale.x.toFixed(2) : 'n/a'}`,
     `Mipmaps sampling: ${samplingEnabled ? 'ENABLED' : 'DISABLED/UNCONFIRMED'}`,
     ''
@@ -1362,6 +1381,7 @@ function updateDebugOverlay() {
   dom.debugOverlay.textContent = [
     `Profile: ${profileName}`,
     `Viewport: ${renderInfo.cssWidth}x${renderInfo.cssHeight} @${renderInfo.resolution.toFixed(2)}x`,
+    `Screen zoom: ${state.localScreenZoom.toFixed(2)}x`,
     `Mipmaps Active (sampling): ${samplingStatus}`,
     `Current Mip: ${activeMipSummary}`,
     `Primary Atlas: ${primaryPage ? `${primaryPage.atlasName} (${primaryPage.width}x${primaryPage.height})` : 'n/a'}`,
@@ -1817,6 +1837,16 @@ function setupUiEvents() {
   dom.scale025.addEventListener('click', () => setZoom(0.25));
   dom.scale05.addEventListener('click', () => setZoom(0.5));
   dom.scale10.addEventListener('click', () => setZoom(1));
+  if (dom.localZoomIn) {
+    dom.localZoomIn.addEventListener('click', () => {
+      setLocalScreenZoom(state.localScreenZoom * LOCAL_SCREEN_ZOOM_STEP);
+    });
+  }
+  if (dom.localZoomOut) {
+    dom.localZoomOut.addEventListener('click', () => {
+      setLocalScreenZoom(state.localScreenZoom / LOCAL_SCREEN_ZOOM_STEP);
+    });
+  }
 
   dom.panToggle.addEventListener('click', () => {
     if (!state.spineObject) {
@@ -1855,6 +1885,7 @@ applyViewportPreset(dom.viewportPreset.value);
 applyRenderScaleSetting(dom.renderScaleSelect.value);
 applyFpsCapSetting(dom.fpsCapSelect.value);
 applyDeviceProfile(dom.deviceProfileSelect.value, { preserveCurrent: true });
+applyLocalScreenZoom();
 updateWorldPosition();
 updateDebugOverlay();
 setBadge('Mipmaps status: waiting for texture', 'neutral');
