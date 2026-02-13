@@ -250,6 +250,10 @@ function fileNameFromPath(path, fallbackName) {
     return fallbackName;
   }
 
+  if (typeof path === 'string' && path.startsWith('data:')) {
+    return fallbackName;
+  }
+
   try {
     const url = new URL(path, window.location.href);
     const value = decodeURIComponent(url.pathname.split('/').pop() || '');

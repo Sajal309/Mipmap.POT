@@ -157,3 +157,93 @@ Example entry:
   "preview": "shared-history/hero/hero.png"
 }
 ```
+
+### Migrate characters you already uploaded on the live site
+
+If those characters only exist in your live-browser history, run this in that page's DevTools Console.  
+It downloads a `manifest.generated.json` containing your local history with inline `data:` assets.
+
+```js
+(async () => {
+  const DB_NAME = 'spine-mipmap-preview-db';
+  const STORE_NAME = 'characters';
+
+  const openDb = () =>
+    new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Failed to open IndexedDB.'));
+    });
+
+  const getAll = (db) =>
+    new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error || new Error('Failed to read history records.'));
+    });
+
+  const toDataUrl = (blob) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Failed to encode blob.'));
+      reader.readAsDataURL(blob);
+    });
+
+  const slug = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `char-${Date.now()}`;
+
+  const db = await openDb();
+  const records = await getAll(db);
+  db.close();
+
+  if (!records.length) {
+    console.log('No history records found.');
+    return;
+  }
+
+  const characters = [];
+  for (let i = 0; i < records.length; i += 1) {
+    const record = records[i];
+    const id = slug(record.name || record.id || `character-${i + 1}`);
+
+    const images = [];
+    for (const img of record.imageFiles || []) {
+      images.push(await toDataUrl(img));
+    }
+
+    characters.push({
+      id,
+      name: record.name || `Character ${i + 1}`,
+      createdAt: new Date(record.createdAt || Date.now()).toISOString(),
+      images,
+      atlas: await toDataUrl(record.atlasFile),
+      skeleton: await toDataUrl(record.jsonFile),
+      ...(record.animationsFile ? { animations: await toDataUrl(record.animationsFile) } : {})
+    });
+  }
+
+  const output = JSON.stringify({ characters }, null, 2);
+  const blob = new Blob([output], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'manifest.generated.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  console.log(`Exported ${characters.length} character(s) to manifest.generated.json`);
+})();
+```
+
+Then:
+
+1. Replace `public/shared-history/manifest.json` with `manifest.generated.json`.
+2. Commit and push.
+3. Redeploy (GitHub Pages Action runs on push).
