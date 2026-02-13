@@ -35,3 +35,8 @@ Notes:
 - Paths are relative to the app root and should stay under `public/shared-history`.
 - `images`, `atlas`, and `skeleton` are required.
 - `preview` is optional (defaults to first image).
+
+Default presets currently shipped in this repo:
+
+- `Base Blue` (`shared-history/base-blue/*`)
+- `Base Orange` (`shared-history/base-orange/*`)

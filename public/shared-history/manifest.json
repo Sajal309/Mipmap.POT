@@ -1,3 +1,22 @@
 {
-  "characters": []
+  "characters": [
+    {
+      "id": "base-blue",
+      "name": "Base Blue",
+      "createdAt": "2026-02-13T00:00:00Z",
+      "images": ["shared-history/base-blue/blue.png"],
+      "atlas": "shared-history/base-blue/blue.atlas",
+      "skeleton": "shared-history/base-blue/blue.json",
+      "preview": "shared-history/base-blue/blue.png"
+    },
+    {
+      "id": "base-orange",
+      "name": "Base Orange",
+      "createdAt": "2026-02-13T00:05:00Z",
+      "images": ["shared-history/base-orange/orange.png"],
+      "atlas": "shared-history/base-orange/orange.atlas",
+      "skeleton": "shared-history/base-orange/orange.json",
+      "preview": "shared-history/base-orange/orange.png"
+    }
+  ]
 }
