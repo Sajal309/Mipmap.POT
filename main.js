@@ -8,6 +8,8 @@ const PAGE_META_KEYS = new Set(['size', 'format', 'filter', 'repeat', 'pma', 'sc
 const HISTORY_DB_NAME = 'spine-mipmap-preview-db';
 const HISTORY_DB_VERSION = 1;
 const HISTORY_STORE = 'characters';
+const SHARED_HISTORY_MANIFEST_PATH = 'shared-history/manifest.json';
+const SHARED_HISTORY_SOURCE = 'shared';
 const FILTER_NAME_BY_VALUE = new Map([
   [9728, 'NEAREST'],
   [9729, 'LINEAR'],
@@ -148,6 +150,7 @@ const state = {
   lastFrameTimestamp: 0,
   historySupported: typeof indexedDB !== 'undefined',
   historyRecords: [],
+  sharedHistoryRecords: [],
   historyPreviewUrls: [],
   activeHistoryRecordId: null,
   viewportBaseScale: 1,
@@ -224,6 +227,174 @@ function toDisplayDate(timestamp) {
 function deriveHistoryName(atlasFile, jsonFile) {
   const stem = (jsonFile?.name || atlasFile?.name || 'character').replace(/\.[^.]+$/, '');
   return stem || 'character';
+}
+
+function sharedPathToUrl(path) {
+  if (typeof path !== 'string' || !path.trim()) {
+    return null;
+  }
+
+  const trimmed = path.trim();
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  const base = import.meta.env.BASE_URL || '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  const normalizedPath = trimmed.replace(/^\/+/, '');
+  return `${normalizedBase}${normalizedPath}`;
+}
+
+function fileNameFromPath(path, fallbackName) {
+  if (!path) {
+    return fallbackName;
+  }
+
+  try {
+    const url = new URL(path, window.location.href);
+    const value = decodeURIComponent(url.pathname.split('/').pop() || '');
+    return value || fallbackName;
+  } catch (_error) {
+    const value = path.split('/').pop();
+    return value || fallbackName;
+  }
+}
+
+function mimeTypeFromFileName(fileName, fallbackType = 'application/octet-stream') {
+  const name = String(fileName || '').toLowerCase();
+  if (name.endsWith('.png')) {
+    return 'image/png';
+  }
+  if (name.endsWith('.atlas')) {
+    return 'text/plain';
+  }
+  if (name.endsWith('.json')) {
+    return 'application/json';
+  }
+  if (name.endsWith('.skel')) {
+    return 'application/octet-stream';
+  }
+  return fallbackType;
+}
+
+function normalizeCreatedAt(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 0;
+}
+
+function isSharedHistoryRecord(record) {
+  return record?.sourceType === SHARED_HISTORY_SOURCE && Boolean(record?.sharedBundle);
+}
+
+function normalizeSharedHistoryRecord(entry, index) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+
+  const rawImages = Array.isArray(entry.images) ? entry.images : [];
+  const imageUrls = rawImages.map((value) => sharedPathToUrl(value)).filter(Boolean);
+  const atlasUrl = sharedPathToUrl(entry.atlas);
+  const skeletonUrl = sharedPathToUrl(entry.skeleton || entry.json);
+  const animationsUrl = sharedPathToUrl(entry.animations || entry.animationsFile || null);
+  const previewUrl = sharedPathToUrl(entry.preview || rawImages[0] || null);
+
+  if (!imageUrls.length || !atlasUrl || !skeletonUrl) {
+    return null;
+  }
+
+  const skeletonName = fileNameFromPath(skeletonUrl, `character-${index + 1}.json`);
+  const fallbackName = skeletonName.replace(/\.[^.]+$/, '') || `shared-character-${index + 1}`;
+  const recordId = entry.id ? `shared-${entry.id}` : `shared-${index + 1}`;
+
+  return {
+    id: recordId,
+    name: entry.name || fallbackName,
+    createdAt: normalizeCreatedAt(entry.createdAt),
+    imageCount: imageUrls.length,
+    sourceType: SHARED_HISTORY_SOURCE,
+    previewUrl,
+    sharedBundle: {
+      images: imageUrls,
+      atlas: atlasUrl,
+      skeleton: skeletonUrl,
+      animations: animationsUrl
+    }
+  };
+}
+
+async function fetchSharedFile(url, fallbackName, fallbackType) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Unable to fetch shared asset (${response.status}): ${url}`);
+  }
+
+  const blob = await response.blob();
+  const fileName = fileNameFromPath(url, fallbackName);
+  const mimeType = blob.type || mimeTypeFromFileName(fileName, fallbackType);
+  return new File([blob], fileName, { type: mimeType });
+}
+
+async function buildSharedBundle(record) {
+  if (!isSharedHistoryRecord(record)) {
+    throw new Error('History record is not a shared bundle.');
+  }
+
+  const bundleRef = record.sharedBundle;
+  const imageFiles = await Promise.all(
+    bundleRef.images.map((url, index) => fetchSharedFile(url, `image-${index + 1}.png`, 'image/png'))
+  );
+  const atlasFile = await fetchSharedFile(bundleRef.atlas, 'character.atlas', 'text/plain');
+  const jsonFile = await fetchSharedFile(bundleRef.skeleton, 'character.json', 'application/octet-stream');
+  const animationsFile = bundleRef.animations
+    ? await fetchSharedFile(bundleRef.animations, 'animations.json', 'application/json')
+    : null;
+
+  return { imageFiles, atlasFile, jsonFile, animationsFile };
+}
+
+async function loadSharedHistoryRecords() {
+  const manifestUrl = sharedPathToUrl(SHARED_HISTORY_MANIFEST_PATH);
+  if (!manifestUrl) {
+    state.sharedHistoryRecords = [];
+    await refreshHistoryList();
+    return;
+  }
+
+  try {
+    const response = await fetch(manifestUrl, { cache: 'no-store' });
+    if (response.status === 404) {
+      state.sharedHistoryRecords = [];
+      await refreshHistoryList();
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch shared history manifest (${response.status}).`);
+    }
+
+    const payload = await response.json();
+    const rawEntries = Array.isArray(payload) ? payload : Array.isArray(payload?.characters) ? payload.characters : [];
+    const records = rawEntries
+      .map((entry, index) => normalizeSharedHistoryRecord(entry, index))
+      .filter(Boolean);
+
+    state.sharedHistoryRecords = records;
+    await refreshHistoryList();
+  } catch (error) {
+    console.error(error);
+    state.sharedHistoryRecords = [];
+    await refreshHistoryList();
+    setHistoryStatus(error.message || 'Failed to load shared history manifest.', 'warn');
+  }
 }
 
 function openHistoryDb() {
@@ -324,6 +495,10 @@ function revokeHistoryPreviewUrls() {
 }
 
 function createHistoryPreviewUrl(record) {
+  if (isSharedHistoryRecord(record) && record.previewUrl) {
+    return record.previewUrl;
+  }
+
   const firstImage = record.imageFiles?.[0];
   if (!firstImage) {
     return null;
@@ -350,6 +525,7 @@ function createHistoryRow(record) {
   const deleteButton = document.createElement('button');
   const meta = document.createElement('div');
   const activeBadge = document.createElement('span');
+  const sharedRecord = isSharedHistoryRecord(record);
 
   thumb.className = 'history-thumb';
   content.className = 'history-content';
@@ -380,30 +556,36 @@ function createHistoryRow(record) {
   loadButton.textContent = record.name || record.id;
   loadButton.addEventListener('click', async () => {
     try {
-      setLoadStatus(`Loading history entry: ${record.name}`);
-      const fullRecord = await getHistoryRecordById(record.id);
-      if (!fullRecord) {
-        await refreshHistoryList();
-        throw new Error('History entry no longer exists.');
+      if (sharedRecord) {
+        setLoadStatus(`Loading shared entry: ${record.name}`);
+        const bundle = await buildSharedBundle(record);
+        await loadSpineBundle(bundle, { saveHistory: false, activeHistoryRecordId: record.id });
+      } else {
+        setLoadStatus(`Loading history entry: ${record.name}`);
+        const fullRecord = await getHistoryRecordById(record.id);
+        if (!fullRecord) {
+          await refreshHistoryList();
+          throw new Error('History entry no longer exists.');
+        }
+
+        const imageFiles = (fullRecord.imageFiles || []).map((file, index) =>
+          getHistoryFile(file, `image-${index + 1}.png`, 'image/png')
+        );
+        const atlasFile = getHistoryFile(fullRecord.atlasFile, fullRecord.atlasName || 'character.atlas', 'text/plain');
+        const jsonFile = getHistoryFile(
+          fullRecord.jsonFile,
+          fullRecord.jsonName || 'character.json',
+          'application/octet-stream'
+        );
+        const animationsFile = fullRecord.animationsFile
+          ? getHistoryFile(fullRecord.animationsFile, fullRecord.animationsName || 'animations.json', 'application/json')
+          : null;
+
+        await loadSpineBundle(
+          { imageFiles, atlasFile, jsonFile, animationsFile },
+          { saveHistory: false, activeHistoryRecordId: fullRecord.id }
+        );
       }
-
-      const imageFiles = (fullRecord.imageFiles || []).map((file, index) =>
-        getHistoryFile(file, `image-${index + 1}.png`, 'image/png')
-      );
-      const atlasFile = getHistoryFile(fullRecord.atlasFile, fullRecord.atlasName || 'character.atlas', 'text/plain');
-      const jsonFile = getHistoryFile(
-        fullRecord.jsonFile,
-        fullRecord.jsonName || 'character.json',
-        'application/octet-stream'
-      );
-      const animationsFile = fullRecord.animationsFile
-        ? getHistoryFile(fullRecord.animationsFile, fullRecord.animationsName || 'animations.json', 'application/json')
-        : null;
-
-      await loadSpineBundle(
-        { imageFiles, atlasFile, jsonFile, animationsFile },
-        { saveHistory: false, activeHistoryRecordId: fullRecord.id }
-      );
     } catch (error) {
       console.error(error);
       setLoadStatus(error.message || 'Failed to load history entry.', 'error');
@@ -426,9 +608,13 @@ function createHistoryRow(record) {
     }
   });
 
-  meta.textContent = `${record.imageCount || 0} image(s) • ${toDisplayDate(record.createdAt)}`;
+  meta.textContent = sharedRecord
+    ? `${record.imageCount || 0} image(s) • shared preset`
+    : `${record.imageCount || 0} image(s) • ${toDisplayDate(record.createdAt)}`;
   actions.appendChild(loadButton);
-  actions.appendChild(deleteButton);
+  if (!sharedRecord) {
+    actions.appendChild(deleteButton);
+  }
   headerRow.appendChild(actions);
   headerRow.appendChild(activeBadge);
   content.appendChild(headerRow);
@@ -441,31 +627,57 @@ function createHistoryRow(record) {
 
 async function refreshHistoryList() {
   revokeHistoryPreviewUrls();
+  const sharedRecords = Array.from(state.sharedHistoryRecords || []);
+  let localRecords = [];
+  let localError = null;
 
-  if (!state.historySupported) {
-    dom.historyList.innerHTML = '';
-    setHistoryStatus('History unavailable in this browser.', 'warn');
+  if (state.historySupported) {
+    try {
+      localRecords = await getAllHistoryRecords();
+    } catch (error) {
+      console.error(error);
+      localError = error;
+    }
+  }
+
+  const records = [...sharedRecords, ...localRecords].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  state.historyRecords = records;
+  dom.historyList.innerHTML = '';
+
+  if (!records.length) {
+    if (!state.historySupported) {
+      setHistoryStatus('History unavailable in this browser.', 'warn');
+    } else {
+      setHistoryStatus('No saved characters yet.');
+    }
     return;
   }
 
-  try {
-    const records = await getAllHistoryRecords();
-    state.historyRecords = records;
-    dom.historyList.innerHTML = '';
-
-    if (!records.length) {
-      setHistoryStatus('No saved characters yet.');
-      return;
-    }
-
-    for (const record of records) {
-      dom.historyList.appendChild(createHistoryRow(record));
-    }
-    setHistoryStatus(`${records.length} saved character(s).`);
-  } catch (error) {
-    console.error(error);
-    setHistoryStatus(error.message || 'Failed to load history.', 'error');
+  for (const record of records) {
+    dom.historyList.appendChild(createHistoryRow(record));
   }
+
+  if (localError) {
+    setHistoryStatus(localError.message || 'Failed to load local history.', 'warn');
+    return;
+  }
+
+  if (!state.historySupported && sharedRecords.length) {
+    setHistoryStatus(`${sharedRecords.length} shared character(s) loaded.`);
+    return;
+  }
+
+  if (sharedRecords.length && localRecords.length) {
+    setHistoryStatus(`${records.length} character(s): ${localRecords.length} local + ${sharedRecords.length} shared.`);
+    return;
+  }
+
+  if (sharedRecords.length) {
+    setHistoryStatus(`${sharedRecords.length} shared character(s) loaded.`);
+    return;
+  }
+
+  setHistoryStatus(`${localRecords.length} saved character(s).`);
 }
 
 function isPowerOfTwo(value) {
@@ -1857,6 +2069,7 @@ function setupUiEvents() {
   });
 
   refreshHistoryList();
+  loadSharedHistoryRecords();
 }
 
 app.ticker.add((delta) => {

@@ -129,3 +129,31 @@ npm run preview -- --host 0.0.0.0 --port 4173
 ```
 
 Then share your machine IP and port `4173` with your colleague.
+
+## Share character history via Git
+
+IndexedDB history is browser-local and cannot be pushed directly from Git.  
+To share characters with teammates, commit them as shared presets:
+
+1. Put character files under:
+   - `public/shared-history/<character-name>/`
+2. Add/update entries in:
+   - `public/shared-history/manifest.json`
+3. Commit and push those files.
+
+On app startup, `manifest.json` is loaded and entries appear in **History** as shared presets.
+
+Example entry:
+
+```json
+{
+  "id": "hero",
+  "name": "Hero",
+  "createdAt": "2026-02-13T00:00:00Z",
+  "images": ["shared-history/hero/hero.png"],
+  "atlas": "shared-history/hero/hero.atlas",
+  "skeleton": "shared-history/hero/hero.json",
+  "animations": "shared-history/hero/hero-animations.json",
+  "preview": "shared-history/hero/hero.png"
+}
+```
