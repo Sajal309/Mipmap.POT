@@ -319,6 +319,17 @@ function normalizeSharedHistoryRecord(entry, index) {
   const skeletonName = fileNameFromPath(skeletonUrl, `character-${index + 1}.json`);
   const fallbackName = skeletonName.replace(/\.[^.]+$/, '') || `shared-character-${index + 1}`;
   const recordId = entry.id ? `shared-${entry.id}` : `shared-${index + 1}`;
+  const rawPotOverride = entry.potOverride;
+  const hasPotOverride =
+    rawPotOverride &&
+    Number.isInteger(rawPotOverride.width) &&
+    Number.isInteger(rawPotOverride.height) &&
+    rawPotOverride.width > 0 &&
+    rawPotOverride.height > 0;
+  const sharedSettings = {
+    potOverride: hasPotOverride ? { width: rawPotOverride.width, height: rawPotOverride.height } : null,
+    mipmapsEnabled: typeof entry.mipmapsEnabled === 'boolean' ? entry.mipmapsEnabled : undefined
+  };
 
   return {
     id: recordId,
@@ -327,6 +338,7 @@ function normalizeSharedHistoryRecord(entry, index) {
     imageCount: imageUrls.length,
     sourceType: SHARED_HISTORY_SOURCE,
     previewUrl,
+    sharedSettings,
     sharedBundle: {
       images: imageUrls,
       atlas: atlasUrl,
@@ -364,6 +376,31 @@ async function buildSharedBundle(record) {
     : null;
 
   return { imageFiles, atlasFile, jsonFile, animationsFile };
+}
+
+function applySharedRuntimeSettings(record) {
+  const settings = record?.sharedSettings;
+  if (!settings || typeof settings !== 'object') {
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(settings, 'mipmapsEnabled')) {
+    const enabled = Boolean(settings.mipmapsEnabled);
+    dom.mipmapToggle.checked = enabled;
+    state.requestedMipmaps = enabled;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(settings, 'potOverride')) {
+    const override = settings.potOverride;
+    if (override && Number.isInteger(override.width) && Number.isInteger(override.height)) {
+      dom.potOverrideToggle.checked = true;
+      dom.potWidthInput.value = String(override.width);
+      dom.potHeightInput.value = String(override.height);
+    } else {
+      dom.potOverrideToggle.checked = false;
+    }
+    dom.potOverrideToggle.dispatchEvent(new Event('change'));
+  }
 }
 
 async function loadSharedHistoryRecords() {
@@ -562,6 +599,7 @@ function createHistoryRow(record) {
     try {
       if (sharedRecord) {
         setLoadStatus(`Loading shared entry: ${record.name}`);
+        applySharedRuntimeSettings(record);
         const bundle = await buildSharedBundle(record);
         await loadSpineBundle(bundle, { saveHistory: false, activeHistoryRecordId: record.id });
       } else {

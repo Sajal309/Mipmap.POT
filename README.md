@@ -159,7 +159,9 @@ Example entry:
   "atlas": "shared-history/hero/hero.atlas",
   "skeleton": "shared-history/hero/hero.json",
   "animations": "shared-history/hero/hero-animations.json",
-  "preview": "shared-history/hero/hero.png"
+  "preview": "shared-history/hero/hero.png",
+  "mipmapsEnabled": true,
+  "potOverride": { "width": 2048, "height": 2048 }
 }
 ```
 

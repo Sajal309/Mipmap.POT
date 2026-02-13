@@ -24,7 +24,9 @@ Update `manifest.json` with one entry per character:
       "atlas": "shared-history/hero/hero.atlas",
       "skeleton": "shared-history/hero/hero.json",
       "animations": "shared-history/hero/hero-animations.json",
-      "preview": "shared-history/hero/hero.png"
+      "preview": "shared-history/hero/hero.png",
+      "mipmapsEnabled": true,
+      "potOverride": { "width": 2048, "height": 2048 }
     }
   ]
 }
@@ -35,6 +37,8 @@ Notes:
 - Paths are relative to the app root and should stay under `public/shared-history`.
 - `images`, `atlas`, and `skeleton` are required.
 - `preview` is optional (defaults to first image).
+- `mipmapsEnabled` is optional (`true`/`false`) and sets the toggle before load.
+- `potOverride` is optional and sets manual POT override before load.
 
 Default presets currently shipped in this repo:
 
