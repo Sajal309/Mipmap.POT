@@ -307,6 +307,9 @@ function normalizeSharedHistoryRecord(entry, index) {
 
   const rawImages = Array.isArray(entry.images) ? entry.images : [];
   const imageUrls = rawImages.map((value) => sharedPathToUrl(value)).filter(Boolean);
+  const imageNames = Array.isArray(entry.imageNames)
+    ? entry.imageNames.map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean)
+    : [];
   const atlasUrl = sharedPathToUrl(entry.atlas);
   const skeletonUrl = sharedPathToUrl(entry.skeleton || entry.json);
   const animationsUrl = sharedPathToUrl(entry.animations || entry.animationsFile || null);
@@ -341,6 +344,7 @@ function normalizeSharedHistoryRecord(entry, index) {
     sharedSettings,
     sharedBundle: {
       images: imageUrls,
+      imageNames,
       atlas: atlasUrl,
       skeleton: skeletonUrl,
       animations: animationsUrl
@@ -367,7 +371,9 @@ async function buildSharedBundle(record) {
 
   const bundleRef = record.sharedBundle;
   const imageFiles = await Promise.all(
-    bundleRef.images.map((url, index) => fetchSharedFile(url, `image-${index + 1}.png`, 'image/png'))
+    bundleRef.images.map((url, index) =>
+      fetchSharedFile(url, bundleRef.imageNames?.[index] || `image-${index + 1}.png`, 'image/png')
+    )
   );
   const atlasFile = await fetchSharedFile(bundleRef.atlas, 'character.atlas', 'text/plain');
   const jsonFile = await fetchSharedFile(bundleRef.skeleton, 'character.json', 'application/octet-stream');

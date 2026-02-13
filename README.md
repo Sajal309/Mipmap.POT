@@ -143,11 +143,6 @@ To share characters with teammates, commit them as shared presets:
 
 On app startup, `manifest.json` is loaded and entries appear in **History** as shared presets.
 
-This repo already includes two default shared presets:
-
-- `Base Blue`
-- `Base Orange`
-
 Example entry:
 
 ```json

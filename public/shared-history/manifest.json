@@ -1,22 +1,72 @@
 {
   "characters": [
     {
-      "id": "base-blue",
-      "name": "Base Blue",
-      "createdAt": "2026-02-13T00:00:00Z",
-      "images": ["shared-history/base-blue/blue.png"],
-      "atlas": "shared-history/base-blue/blue.atlas",
-      "skeleton": "shared-history/base-blue/blue.json",
-      "preview": "shared-history/base-blue/blue.png"
+      "createdAt": "2026-02-13T08:15:34.153Z",
+      "images": [
+        "shared-history/imported/village-man-21/Village_Man_21.png"
+      ],
+      "imageNames": [
+        "Village_Man_21.png"
+      ],
+      "atlas": "shared-history/imported/village-man-21/village-man-21.atlas",
+      "skeleton": "shared-history/imported/village-man-21/village-man-21.json",
+      "preview": "shared-history/imported/village-man-21/Village_Man_21.png",
+      "id": "village-man-21-npot",
+      "name": "Village_Man_21 (NPOT)",
+      "mipmapsEnabled": false
     },
     {
-      "id": "base-orange",
-      "name": "Base Orange",
-      "createdAt": "2026-02-13T00:05:00Z",
-      "images": ["shared-history/base-orange/orange.png"],
-      "atlas": "shared-history/base-orange/orange.atlas",
-      "skeleton": "shared-history/base-orange/orange.json",
-      "preview": "shared-history/base-orange/orange.png"
+      "createdAt": "2026-02-13T08:15:34.153Z",
+      "images": [
+        "shared-history/imported/village-man-21/Village_Man_21.png"
+      ],
+      "imageNames": [
+        "Village_Man_21.png"
+      ],
+      "atlas": "shared-history/imported/village-man-21/village-man-21.atlas",
+      "skeleton": "shared-history/imported/village-man-21/village-man-21.json",
+      "preview": "shared-history/imported/village-man-21/Village_Man_21.png",
+      "id": "village-man-21-pot",
+      "name": "Village_Man_21 (POT)",
+      "mipmapsEnabled": true,
+      "potOverride": {
+        "width": 4096,
+        "height": 2048
+      }
+    },
+    {
+      "createdAt": "2026-02-13T08:15:04.635Z",
+      "images": [
+        "shared-history/imported/man-39/Man_39.png"
+      ],
+      "imageNames": [
+        "Man_39.png"
+      ],
+      "atlas": "shared-history/imported/man-39/man-39.atlas",
+      "skeleton": "shared-history/imported/man-39/man-39.skel",
+      "preview": "shared-history/imported/man-39/Man_39.png",
+      "id": "man-39-npot",
+      "name": "Man_39 (NPOT)",
+      "mipmapsEnabled": false
+    },
+    {
+      "createdAt": "2026-02-13T08:15:04.635Z",
+      "images": [
+        "shared-history/imported/man-39/Man_39.png"
+      ],
+      "imageNames": [
+        "Man_39.png"
+      ],
+      "atlas": "shared-history/imported/man-39/man-39.atlas",
+      "skeleton": "shared-history/imported/man-39/man-39.skel",
+      "preview": "shared-history/imported/man-39/Man_39.png",
+      "id": "man-39-pot",
+      "name": "Man_39 (POT)",
+      "mipmapsEnabled": true,
+      "potOverride": {
+        "width": 2048,
+        "height": 2048
+      }
     }
   ]
 }

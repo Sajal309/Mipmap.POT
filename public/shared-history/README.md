@@ -39,8 +39,3 @@ Notes:
 - `preview` is optional (defaults to first image).
 - `mipmapsEnabled` is optional (`true`/`false`) and sets the toggle before load.
 - `potOverride` is optional and sets manual POT override before load.
-
-Default presets currently shipped in this repo:
-
-- `Base Blue` (`shared-history/base-blue/*`)
-- `Base Orange` (`shared-history/base-orange/*`)
