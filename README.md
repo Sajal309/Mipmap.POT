@@ -101,3 +101,31 @@ If a page is non-power-of-two, runtime marks `Texture POT: NO (...)`, disables m
 ### GL filter not sticking
 
 Runtime forces filters after texture bind and bumps Pixi style dirty state before update. If needed, toggle **Mipmaps ON/OFF** once to re-apply and verify MIN/MAG filters in the panel.
+
+## Share with colleague
+
+### Option 1: Cloud link (GitHub Pages, recommended)
+
+This repo is configured to auto-deploy from `main` using:
+
+- `.github/workflows/deploy-pages.yml`
+
+Steps:
+
+1. Push your latest commit to `main`.
+2. In GitHub, open **Settings > Pages** and set **Source** to **GitHub Actions** (one-time).
+3. Wait for the **Deploy To GitHub Pages** workflow to finish.
+4. Share this URL:
+   - `https://<your-github-username>.github.io/<repo-name>/`
+   - for this repo: `https://Sajal309.github.io/Mipmap.POT/`
+
+Note: The build uses `VITE_BASE_PATH` in CI so hashed asset URLs work correctly on project pages.
+
+### Option 2: Quick local share (same network)
+
+```bash
+npm run build
+npm run preview -- --host 0.0.0.0 --port 4173
+```
+
+Then share your machine IP and port `4173` with your colleague.
