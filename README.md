@@ -29,7 +29,10 @@ Open the Vite URL in your browser.
    - **Manual POT override** with POT width/height (pads pages without scaling)
    - **Scale test 0.25x / 0.5x / 1.0x**
    - **Pan test ON/OFF**
-4. Click animation names in **Animations** to play looping animations.
+4. In **Animations**, choose one **Primary (Base)** animation and optionally add secondary overlays:
+   - Hand Part: up to 2
+   - Leg Part: up to 2
+   - Expression: up to 1
 5. Loaded characters are saved to **Character history**; click an entry to reload instantly without reuploading files.
 
 ## Runtime behavior

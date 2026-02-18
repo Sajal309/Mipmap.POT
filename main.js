@@ -71,6 +71,16 @@ const DEVICE_PROFILES = [
   }
 ];
 const LOCAL_SCREEN_ZOOM_STEP = 1.2;
+const SECONDARY_ANIMATION_LIMITS = Object.freeze({
+  hand: 2,
+  leg: 2,
+  expression: 1
+});
+const SECONDARY_TRACKS_BY_TYPE = Object.freeze({
+  hand: [1, 2],
+  leg: [3, 4],
+  expression: [5]
+});
 
 const dom = {
   imageInput: document.getElementById('imageInput'),
@@ -95,9 +105,15 @@ const dom = {
   scale025: document.getElementById('scale025'),
   scale05: document.getElementById('scale05'),
   scale10: document.getElementById('scale10'),
-  animationList: document.getElementById('animationList'),
+  animationSelectionSummary: document.getElementById('animationSelectionSummary'),
+  primaryAnimationList: document.getElementById('primaryAnimationList'),
+  secondaryHandAnimationList: document.getElementById('secondaryHandAnimationList'),
+  secondaryLegAnimationList: document.getElementById('secondaryLegAnimationList'),
+  secondaryExpressionAnimationList: document.getElementById('secondaryExpressionAnimationList'),
+  clearAllSecondaryAnimationsButton: document.getElementById('clearAllSecondaryAnimationsButton'),
   boneList: document.getElementById('boneList'),
   slotList: document.getElementById('slotList'),
+  attachmentList: document.getElementById('attachmentList'),
   potStatus: document.getElementById('potStatus'),
   renderResolutionTag: document.getElementById('renderResolutionTag'),
   mipEstimateTag: document.getElementById('mipEstimateTag'),
@@ -158,6 +174,18 @@ const state = {
   activeDeviceProfileId: 'custom',
   simulatedCpuThrottleMs: 0,
   applyingDeviceProfile: false,
+  animationCatalog: {
+    primary: [],
+    hand: [],
+    leg: [],
+    expression: []
+  },
+  selectedPrimaryAnimation: null,
+  selectedSecondaryAnimations: {
+    hand: [],
+    leg: [],
+    expression: []
+  },
   logs: []
 };
 
@@ -967,9 +995,33 @@ async function waitForBaseTexture(baseTexture) {
 }
 
 function clearCollections() {
-  dom.animationList.innerHTML = '';
+  dom.primaryAnimationList.innerHTML = '';
+  dom.secondaryHandAnimationList.innerHTML = '';
+  dom.secondaryLegAnimationList.innerHTML = '';
+  dom.secondaryExpressionAnimationList.innerHTML = '';
+  if (dom.animationSelectionSummary) {
+    dom.animationSelectionSummary.textContent = 'Load a character to configure primary and secondary layers.';
+  }
+  if (dom.clearAllSecondaryAnimationsButton) {
+    dom.clearAllSecondaryAnimationsButton.disabled = true;
+  }
+
+  state.animationCatalog = {
+    primary: [],
+    hand: [],
+    leg: [],
+    expression: []
+  };
+  state.selectedPrimaryAnimation = null;
+  state.selectedSecondaryAnimations = {
+    hand: [],
+    leg: [],
+    expression: []
+  };
+
   dom.boneList.innerHTML = '';
   dom.slotList.innerHTML = '';
+  dom.attachmentList.innerHTML = '';
 }
 
 function appendLog(source, message, level = 'info') {
@@ -1091,27 +1143,405 @@ function setLocalScreenZoom(scale) {
   updateDebugOverlay();
 }
 
-function populateAnimationList(spineObject) {
-  dom.animationList.innerHTML = '';
+function getAnimationNameTokens(animationName) {
+  return String(animationName || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function classifyAnimationLayer(animationName) {
+  const tokens = getAnimationNameTokens(animationName);
+  const hasPartMarker = tokens.includes('part');
+
+  if (
+    tokens.includes('expression') ||
+    tokens.includes('facial') ||
+    tokens.includes('face') ||
+    (tokens.includes('head') && hasPartMarker)
+  ) {
+    return 'expression';
+  }
+
+  if ((tokens.includes('hand') && hasPartMarker) || tokens.includes('handpart')) {
+    return 'hand';
+  }
+
+  if ((tokens.includes('leg') && hasPartMarker) || tokens.includes('legpart')) {
+    return 'leg';
+  }
+
+  return 'primary';
+}
+
+function buildAnimationCatalog(spineObject) {
+  const catalog = {
+    primary: [],
+    hand: [],
+    leg: [],
+    expression: []
+  };
 
   const animations = spineObject.spineData.animations || [];
   for (const animation of animations) {
-    const listItem = document.createElement('li');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = animation.name;
-    button.addEventListener('click', () => {
-      spineObject.state.setAnimation(0, animation.name, true);
-      setLoadStatus(`Playing animation: ${animation.name}`);
-    });
-
-    listItem.appendChild(button);
-    dom.animationList.appendChild(listItem);
+    const layerType = classifyAnimationLayer(animation.name);
+    catalog[layerType].push(animation.name);
   }
 
-  if (animations.length > 0) {
-    spineObject.state.setAnimation(0, animations[0].name, true);
+  // Fallback for old assets where no naming convention exists.
+  if (!catalog.primary.length && animations.length) {
+    catalog.primary = animations.map((animation) => animation.name);
+    catalog.hand = [];
+    catalog.leg = [];
+    catalog.expression = [];
   }
+
+  return catalog;
+}
+
+function syncSelectedAnimationsToCatalog() {
+  const { animationCatalog } = state;
+
+  if (!animationCatalog.primary.includes(state.selectedPrimaryAnimation)) {
+    state.selectedPrimaryAnimation = animationCatalog.primary[0] || null;
+  }
+
+  for (const type of Object.keys(SECONDARY_ANIMATION_LIMITS)) {
+    const allowed = new Set(animationCatalog[type]);
+    const limit = SECONDARY_ANIMATION_LIMITS[type];
+    const filtered = (state.selectedSecondaryAnimations[type] || []).filter((name) => allowed.has(name)).slice(0, limit);
+    state.selectedSecondaryAnimations[type] = filtered;
+  }
+}
+
+function selectedNamesToDisplay(names) {
+  if (!Array.isArray(names) || !names.length) {
+    return 'none';
+  }
+
+  return names.join(', ');
+}
+
+function updateAnimationSelectionSummary() {
+  if (!dom.animationSelectionSummary) {
+    return;
+  }
+
+  if (!state.selectedPrimaryAnimation) {
+    dom.animationSelectionSummary.textContent = 'No animations were detected in this skeleton.';
+    return;
+  }
+
+  dom.animationSelectionSummary.textContent =
+    `Primary: ${state.selectedPrimaryAnimation} | ` +
+    `Hand: ${selectedNamesToDisplay(state.selectedSecondaryAnimations.hand)} | ` +
+    `Leg: ${selectedNamesToDisplay(state.selectedSecondaryAnimations.leg)} | ` +
+    `Expression: ${selectedNamesToDisplay(state.selectedSecondaryAnimations.expression)}`;
+}
+
+function hasAnySecondarySelection() {
+  return Object.keys(SECONDARY_ANIMATION_LIMITS).some((type) => state.selectedSecondaryAnimations[type].length > 0);
+}
+
+function updateClearAllSecondaryButtonState() {
+  if (!dom.clearAllSecondaryAnimationsButton) {
+    return;
+  }
+
+  dom.clearAllSecondaryAnimationsButton.disabled = !hasAnySecondarySelection();
+}
+
+function renderEmptyAnimationList(listElement, message) {
+  listElement.innerHTML = '';
+
+  const item = document.createElement('li');
+  item.className = 'animation-empty';
+  item.textContent = message;
+  listElement.appendChild(item);
+}
+
+function getSecondaryListElement(type) {
+  if (type === 'hand') {
+    return dom.secondaryHandAnimationList;
+  }
+  if (type === 'leg') {
+    return dom.secondaryLegAnimationList;
+  }
+
+  return dom.secondaryExpressionAnimationList;
+}
+
+function clearSecondaryAnimationSelection(type, options = {}) {
+  const { silent = false } = options;
+  if (!Object.prototype.hasOwnProperty.call(SECONDARY_ANIMATION_LIMITS, type)) {
+    return;
+  }
+
+  state.selectedSecondaryAnimations[type] = [];
+  applySelectedAnimationLayers();
+  renderAnimationControls();
+  if (!silent) {
+    setLoadStatus(`Cleared all ${type} secondary animations.`);
+  }
+}
+
+function clearAllSecondaryAnimationSelections(options = {}) {
+  const { silent = false } = options;
+  for (const type of Object.keys(SECONDARY_ANIMATION_LIMITS)) {
+    state.selectedSecondaryAnimations[type] = [];
+  }
+
+  const spineObject = state.spineObject;
+  if (spineObject) {
+    const spineState = spineObject.state;
+
+    for (const trackIndices of Object.values(SECONDARY_TRACKS_BY_TYPE)) {
+      for (const trackIndex of trackIndices) {
+        spineState.clearTrack(trackIndex);
+      }
+    }
+
+    if (state.selectedPrimaryAnimation) {
+      // Ensure any lingering partial-pose from secondary overlays is reset back to base motion.
+      spineObject.skeleton.setToSetupPose();
+      spineState.setAnimation(0, state.selectedPrimaryAnimation, true);
+    } else {
+      spineState.clearTrack(0);
+    }
+
+    spineObject.update(0);
+    updateAnimationSelectionSummary();
+    updateClearAllSecondaryButtonState();
+  } else {
+    applySelectedAnimationLayers();
+  }
+
+  renderAnimationControls();
+  if (!silent) {
+    setLoadStatus('Cleared all secondary animations.');
+  }
+}
+
+function setTrackAnimationIfNeeded(spineState, trackIndex, animationName) {
+  const current = spineState.getCurrent(trackIndex);
+  const currentAnimation = current?.animation?.name || null;
+
+  if (!animationName) {
+    if (current) {
+      spineState.clearTrack(trackIndex);
+    }
+    return;
+  }
+
+  if (currentAnimation === animationName) {
+    return;
+  }
+
+  spineState.setAnimation(trackIndex, animationName, true);
+}
+
+function applySelectedAnimationLayers() {
+  const spineObject = state.spineObject;
+  if (!spineObject) {
+    updateAnimationSelectionSummary();
+    updateClearAllSecondaryButtonState();
+    return;
+  }
+
+  const spineState = spineObject.state;
+  setTrackAnimationIfNeeded(spineState, 0, state.selectedPrimaryAnimation);
+
+  for (const [type, trackIndices] of Object.entries(SECONDARY_TRACKS_BY_TYPE)) {
+    const selected = state.selectedSecondaryAnimations[type] || [];
+    for (let i = 0; i < trackIndices.length; i += 1) {
+      const animationName = selected[i] || null;
+      setTrackAnimationIfNeeded(spineState, trackIndices[i], animationName);
+    }
+  }
+
+  spineObject.update(0);
+  updateAnimationSelectionSummary();
+  updateClearAllSecondaryButtonState();
+}
+
+function renderAnimationControls() {
+  const primaryAnimations = state.animationCatalog.primary || [];
+  updateClearAllSecondaryButtonState();
+
+  dom.primaryAnimationList.innerHTML = '';
+
+  if (!primaryAnimations.length) {
+    renderEmptyAnimationList(dom.primaryAnimationList, 'No base animation found.');
+  } else {
+    for (const animationName of primaryAnimations) {
+      const listItem = document.createElement('li');
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      const control = document.createElement('span');
+      const text = document.createElement('span');
+
+      label.className = 'animation-option';
+      input.type = 'radio';
+      input.name = 'primaryAnimation';
+      input.value = animationName;
+      input.checked = state.selectedPrimaryAnimation === animationName;
+      input.className = 'animation-option-input';
+      control.className = 'animation-option-control';
+      text.className = 'animation-option-text';
+      text.textContent = animationName;
+
+      input.addEventListener('change', () => {
+        if (!input.checked) {
+          return;
+        }
+
+        state.selectedPrimaryAnimation = animationName;
+        applySelectedAnimationLayers();
+        setLoadStatus(`Primary animation set to "${animationName}".`);
+      });
+
+      label.appendChild(input);
+      label.appendChild(control);
+      label.appendChild(text);
+      listItem.appendChild(label);
+      dom.primaryAnimationList.appendChild(listItem);
+    }
+  }
+
+  for (const type of Object.keys(SECONDARY_ANIMATION_LIMITS)) {
+    const listElement = getSecondaryListElement(type);
+    const items = state.animationCatalog[type] || [];
+    listElement.innerHTML = '';
+
+    if (!items.length) {
+      renderEmptyAnimationList(listElement, `No ${type} part animation found.`);
+      continue;
+    }
+
+    if (type === 'expression') {
+      const noneItem = document.createElement('li');
+      const noneLabel = document.createElement('label');
+      const noneInput = document.createElement('input');
+      const noneControl = document.createElement('span');
+      const noneText = document.createElement('span');
+
+      noneLabel.className = 'animation-option';
+      noneInput.type = 'radio';
+      noneInput.name = 'secondaryExpressionAnimation';
+      noneInput.value = '';
+      noneInput.checked = state.selectedSecondaryAnimations.expression.length === 0;
+      noneInput.className = 'animation-option-input';
+      noneControl.className = 'animation-option-control';
+      noneText.className = 'animation-option-text';
+      noneText.textContent = 'None';
+
+      noneInput.addEventListener('change', () => {
+        if (!noneInput.checked) {
+          return;
+        }
+
+        clearSecondaryAnimationSelection('expression', { silent: true });
+        setLoadStatus('Expression overlay cleared.');
+      });
+
+      noneLabel.appendChild(noneInput);
+      noneLabel.appendChild(noneControl);
+      noneLabel.appendChild(noneText);
+      noneItem.appendChild(noneLabel);
+      listElement.appendChild(noneItem);
+
+      for (const animationName of items) {
+        const listItem = document.createElement('li');
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        const control = document.createElement('span');
+        const text = document.createElement('span');
+
+        label.className = 'animation-option';
+        input.type = 'radio';
+        input.name = 'secondaryExpressionAnimation';
+        input.value = animationName;
+        input.checked = state.selectedSecondaryAnimations.expression[0] === animationName;
+        input.className = 'animation-option-input';
+        control.className = 'animation-option-control';
+        text.className = 'animation-option-text';
+        text.textContent = animationName;
+
+        input.addEventListener('change', () => {
+          if (!input.checked) {
+            return;
+          }
+
+          state.selectedSecondaryAnimations.expression = [animationName];
+          applySelectedAnimationLayers();
+          setLoadStatus('Updated layered animation playback.');
+        });
+
+        label.appendChild(input);
+        label.appendChild(control);
+        label.appendChild(text);
+        listItem.appendChild(label);
+        listElement.appendChild(listItem);
+      }
+      continue;
+    }
+
+    for (const animationName of items) {
+      const listItem = document.createElement('li');
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      const control = document.createElement('span');
+      const text = document.createElement('span');
+
+      label.className = 'animation-option';
+      input.type = 'checkbox';
+      input.value = animationName;
+      input.checked = state.selectedSecondaryAnimations[type].includes(animationName);
+      input.className = 'animation-option-input';
+      control.className = 'animation-option-control';
+      text.className = 'animation-option-text';
+      text.textContent = animationName;
+
+      input.addEventListener('change', () => {
+        const selected = state.selectedSecondaryAnimations[type];
+        const limit = SECONDARY_ANIMATION_LIMITS[type];
+
+        if (input.checked) {
+          if (selected.includes(animationName)) {
+            return;
+          }
+          if (selected.length >= limit) {
+            input.checked = false;
+            setLoadStatus(`Secondary ${type} animation limit reached (${limit}).`, 'warn');
+            return;
+          }
+          selected.push(animationName);
+        } else {
+          state.selectedSecondaryAnimations[type] = selected.filter((name) => name !== animationName);
+        }
+
+        applySelectedAnimationLayers();
+        setLoadStatus('Updated layered animation playback.');
+      });
+
+      label.appendChild(input);
+      label.appendChild(control);
+      label.appendChild(text);
+      listItem.appendChild(label);
+      listElement.appendChild(listItem);
+    }
+  }
+
+  updateAnimationSelectionSummary();
+}
+
+function populateAnimationList(spineObject) {
+  state.animationCatalog = buildAnimationCatalog(spineObject);
+  syncSelectedAnimationsToCatalog();
+  renderAnimationControls();
+  applySelectedAnimationLayers();
 }
 
 function populateBoneList(spineObject) {
@@ -1131,6 +1561,219 @@ function populateSlotList(spineObject) {
     const item = document.createElement('li');
     item.textContent = slot.data.name;
     dom.slotList.appendChild(item);
+  }
+}
+
+function getCurrentSlotAttachment(slot) {
+  if (!slot) {
+    return null;
+  }
+
+  return slot.getAttachment ? slot.getAttachment() : slot.attachment || null;
+}
+
+function syncAttachmentToggleStates(spineObject) {
+  if (!spineObject || !dom.attachmentList) {
+    return;
+  }
+
+  const slots = spineObject.skeleton?.slots || [];
+  const toggleInputs = dom.attachmentList.querySelectorAll('input.attachment-toggle-input');
+  for (const input of toggleInputs) {
+    const slotIndex = Number.parseInt(input.dataset.slotIndex || '', 10);
+    const attachmentName = input.dataset.attachmentName || '';
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || !attachmentName) {
+      input.checked = false;
+      continue;
+    }
+
+    const activeAttachment = getCurrentSlotAttachment(slots[slotIndex]);
+    input.checked = Boolean(activeAttachment && activeAttachment.name === attachmentName);
+  }
+}
+
+function populateAttachmentList(spineObject) {
+  dom.attachmentList.innerHTML = '';
+
+  const spineData = spineObject.spineData;
+  const skeleton = spineObject.skeleton;
+  const slots = skeleton.slots || [];
+  const slotDataList = spineData.slots || [];
+  const recordByKey = new Map();
+
+  const addAttachmentRecord = (slotIndex, attachmentName, attachmentRef = null) => {
+    if (!Number.isInteger(slotIndex) || slotIndex < 0) {
+      return;
+    }
+    if (typeof attachmentName !== 'string' || !attachmentName.trim()) {
+      return;
+    }
+
+    const slotName = slotDataList[slotIndex]?.name || `slot-${slotIndex}`;
+    const normalizedAttachment = attachmentName.trim();
+    const key = `${slotIndex}\u0000${normalizedAttachment}`;
+    let record = recordByKey.get(key);
+    if (!record) {
+      record = {
+        slotIndex,
+        slotName,
+        attachmentName: normalizedAttachment,
+        attachmentRef: attachmentRef || null
+      };
+      recordByKey.set(key, record);
+    }
+    if (!record.attachmentRef && attachmentRef) {
+      record.attachmentRef = attachmentRef;
+    }
+  };
+
+  for (let slotIndex = 0; slotIndex < slotDataList.length; slotIndex += 1) {
+    const setupAttachmentName = slotDataList[slotIndex]?.attachmentName;
+    const setupAttachmentRef = setupAttachmentName ? skeleton.getAttachment(slotIndex, setupAttachmentName) : null;
+    addAttachmentRecord(slotIndex, setupAttachmentName, setupAttachmentRef);
+  }
+
+  for (const skin of spineData.skins || []) {
+    if (!skin || typeof skin.getAttachments !== 'function') {
+      continue;
+    }
+
+    const entries = skin.getAttachments() || [];
+    for (const entry of entries) {
+      addAttachmentRecord(entry.slotIndex, entry.name, entry.attachment || null);
+    }
+  }
+
+  const sortedRecords = Array.from(recordByKey.values()).sort((a, b) => {
+    const bySlot = a.slotIndex - b.slotIndex;
+    if (bySlot !== 0) {
+      return bySlot;
+    }
+    return a.attachmentName.localeCompare(b.attachmentName);
+  });
+
+  if (!sortedRecords.length) {
+    const item = document.createElement('li');
+    item.textContent = 'No attachments found.';
+    dom.attachmentList.appendChild(item);
+    return;
+  }
+
+  const groupsBySlot = new Map();
+  for (const record of sortedRecords) {
+    let group = groupsBySlot.get(record.slotIndex);
+    if (!group) {
+      group = {
+        slotIndex: record.slotIndex,
+        slotName: record.slotName,
+        records: []
+      };
+      groupsBySlot.set(record.slotIndex, group);
+    }
+    group.records.push(record);
+  }
+
+  const groupedRecords = Array.from(groupsBySlot.values()).sort((a, b) => a.slotIndex - b.slotIndex);
+
+  const createAttachmentOptionItem = (record, options = {}) => {
+    const { useRadioSelection = false, radioGroupName = '' } = options;
+    const slot = slots[record.slotIndex];
+    const activeAttachment = getCurrentSlotAttachment(slot);
+    const isActive = Boolean(activeAttachment && activeAttachment.name === record.attachmentName);
+
+    const listItem = document.createElement('li');
+    const option = document.createElement('label');
+    const toggleInput = document.createElement('input');
+    const toggleControl = document.createElement('span');
+    const name = document.createElement('span');
+
+    listItem.className = 'attachment-item';
+    option.className = 'animation-option attachment-option';
+    toggleInput.className = 'animation-option-input attachment-toggle-input';
+    toggleControl.className = 'animation-option-control';
+    name.className = 'animation-option-text attachment-name';
+    toggleInput.type = useRadioSelection ? 'radio' : 'checkbox';
+    if (useRadioSelection) {
+      toggleInput.name = radioGroupName;
+    }
+    toggleInput.checked = isActive;
+    toggleInput.dataset.slotIndex = String(record.slotIndex);
+    toggleInput.dataset.attachmentName = record.attachmentName;
+
+    toggleInput.addEventListener('change', () => {
+      const targetSlot = slots[record.slotIndex];
+      if (!targetSlot) {
+        return;
+      }
+
+      if (useRadioSelection) {
+        if (!toggleInput.checked) {
+          return;
+        }
+        if (record.attachmentRef) {
+          targetSlot.setAttachment(record.attachmentRef);
+        } else {
+          skeleton.setAttachment(record.slotName, record.attachmentName);
+        }
+      } else if (toggleInput.checked) {
+        if (record.attachmentRef) {
+          targetSlot.setAttachment(record.attachmentRef);
+        } else {
+          skeleton.setAttachment(record.slotName, record.attachmentName);
+        }
+      } else {
+        const currentAttachment = getCurrentSlotAttachment(targetSlot);
+        if (currentAttachment && currentAttachment.name === record.attachmentName) {
+          targetSlot.setAttachment(null);
+        }
+      }
+
+      spineObject.update(0);
+      syncAttachmentToggleStates(spineObject);
+      setLoadStatus(`Attachment ${toggleInput.checked ? 'ON' : 'OFF'}: ${record.slotName} -> ${record.attachmentName}`);
+    });
+
+    name.textContent = useRadioSelection ? record.attachmentName : `${record.slotName} -> ${record.attachmentName}`;
+    option.appendChild(toggleInput);
+    option.appendChild(toggleControl);
+    option.appendChild(name);
+    listItem.appendChild(option);
+
+    return listItem;
+  };
+
+  for (const group of groupedRecords) {
+    if (group.records.length <= 1) {
+      const standaloneItem = createAttachmentOptionItem(group.records[0], { useRadioSelection: false });
+      standaloneItem.classList.add('attachment-single-item');
+      dom.attachmentList.appendChild(standaloneItem);
+      continue;
+    }
+
+    const groupItem = document.createElement('li');
+    const groupDetails = document.createElement('details');
+    const groupSummary = document.createElement('summary');
+    const groupList = document.createElement('ul');
+    const radioGroupName = `attachment-slot-${group.slotIndex}`;
+
+    groupItem.className = 'attachment-group-item';
+    groupDetails.className = 'attachment-group';
+    groupSummary.className = 'attachment-group-summary';
+    groupSummary.textContent = `${group.slotName} (${group.records.length})`;
+    groupList.className = 'attachment-group-list';
+
+    for (const record of group.records) {
+      const optionItem = createAttachmentOptionItem(record, {
+        useRadioSelection: true,
+        radioGroupName
+      });
+      groupList.appendChild(optionItem);
+    }
+
+    groupDetails.appendChild(groupSummary);
+    groupDetails.appendChild(groupList);
+    groupItem.appendChild(groupDetails);
+    dom.attachmentList.appendChild(groupItem);
   }
 }
 
@@ -1986,6 +2629,7 @@ async function loadSpineBundle(bundle, options = {}) {
 
     populateBoneList(spineObject);
     populateSlotList(spineObject);
+    populateAttachmentList(spineObject);
     updatePotStatus();
 
     if (state.npotWarnings.length) {
@@ -2048,6 +2692,11 @@ async function handleAddSpine() {
 
 function setupUiEvents() {
   dom.addButton.addEventListener('click', handleAddSpine);
+  if (dom.clearAllSecondaryAnimationsButton) {
+    dom.clearAllSecondaryAnimationsButton.addEventListener('click', () => {
+      clearAllSecondaryAnimationSelections();
+    });
+  }
   if (dom.clearLogsButton) {
     dom.clearLogsButton.addEventListener('click', () => {
       clearLogs();

@@ -53,7 +53,30 @@
 
         <details class="card" open>
           <summary>Animations</summary>
-          <ul id="animationList" class="list"></ul>
+          <div class="animation-toolbar">
+            <p id="animationSelectionSummary" class="hint">Load a character to configure primary and secondary layers.</p>
+            <button id="clearAllSecondaryAnimationsButton" class="tertiary animation-clear" type="button">
+              Clear all secondary
+            </button>
+          </div>
+          <div class="animation-grid">
+            <details class="animation-group animation-subsection" open>
+              <summary>Primary (Base)</summary>
+              <ul id="primaryAnimationList" class="list animation-list"></ul>
+            </details>
+            <details class="animation-group animation-subsection">
+              <summary>Secondary Hand Part (0-2)</summary>
+              <ul id="secondaryHandAnimationList" class="list animation-list"></ul>
+            </details>
+            <details class="animation-group animation-subsection">
+              <summary>Secondary Leg Part (0-2)</summary>
+              <ul id="secondaryLegAnimationList" class="list animation-list"></ul>
+            </details>
+            <details class="animation-group animation-subsection">
+              <summary>Secondary Expression (0-1)</summary>
+              <ul id="secondaryExpressionAnimationList" class="list animation-list"></ul>
+            </details>
+          </div>
         </details>
 
         <details class="card">
@@ -64,6 +87,11 @@
         <details class="card">
           <summary>Slots</summary>
           <ul id="slotList" class="list"></ul>
+        </details>
+
+        <details class="card">
+          <summary>Attachments</summary>
+          <ul id="attachmentList" class="list"></ul>
         </details>
       </aside>
 
