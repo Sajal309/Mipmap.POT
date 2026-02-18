@@ -357,6 +357,31 @@ button:hover {
   min-width: 0;
 }
 
+.animation-search-row {
+  margin: 0 0 8px;
+}
+
+.animation-search-input {
+  width: 100%;
+  border: 1px solid #2f3d56;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #162235 0%, #121b2b 100%);
+  color: #e8f1ff;
+  padding: 8px 10px;
+  font-size: 0.74rem;
+  letter-spacing: 0.01em;
+}
+
+.animation-search-input::placeholder {
+  color: #7d93b3;
+}
+
+.animation-search-input:focus-visible {
+  outline: 2px solid #8fb6ff;
+  outline-offset: 1px;
+  border-color: #5d83b8;
+}
+
 .animation-group {
   border: 1px solid #2b3448;
   border-radius: 10px;
@@ -423,11 +448,47 @@ button:hover {
   cursor: not-allowed;
 }
 
-.animation-list {
+.animation-subsection > .list.animation-list {
   margin: 0;
-  max-height: 146px;
+  max-height: 170px;
   padding: 7px 8px 8px;
-  padding-right: 3px;
+  display: grid;
+  gap: 6px;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+.animation-subsection > .list.animation-list > li {
+  border-bottom: 0;
+  padding: 0;
+}
+
+.animation-subsection > .list.animation-list > .animation-empty {
+  padding: 6px 0;
+}
+
+/* Hard-pin spacing for all animation lists (including Primary/Base). */
+#primaryAnimationList,
+#secondaryHandAnimationList,
+#secondaryLegAnimationList,
+#secondaryExpressionAnimationList {
+  margin: 0;
+  max-height: 170px;
+  padding: 7px 8px 8px;
+  display: grid;
+  gap: 6px;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+#primaryAnimationList > li,
+#secondaryHandAnimationList > li,
+#secondaryLegAnimationList > li,
+#secondaryExpressionAnimationList > li {
+  border-bottom: 0;
+  padding: 0;
 }
 
 .animation-option {
@@ -513,12 +574,12 @@ button:hover {
 .animation-option:has(.animation-option-input:checked) {
   border-color: #5e91cc;
   background: linear-gradient(180deg, #1f3150 0%, #17253d 100%);
-  box-shadow: 0 0 0 1px rgba(123, 177, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(123, 177, 255, 0.24);
 }
 
 .animation-option:has(.animation-option-input:focus-visible) {
-  outline: 2px solid #8fb6ff;
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: inset 0 0 0 2px #8fb6ff;
 }
 
 .animation-empty {

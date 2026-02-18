@@ -106,6 +106,7 @@ const dom = {
   scale05: document.getElementById('scale05'),
   scale10: document.getElementById('scale10'),
   animationSelectionSummary: document.getElementById('animationSelectionSummary'),
+  animationSearchInput: document.getElementById('animationSearchInput'),
   primaryAnimationList: document.getElementById('primaryAnimationList'),
   secondaryHandAnimationList: document.getElementById('secondaryHandAnimationList'),
   secondaryLegAnimationList: document.getElementById('secondaryLegAnimationList'),
@@ -113,6 +114,7 @@ const dom = {
   clearAllSecondaryAnimationsButton: document.getElementById('clearAllSecondaryAnimationsButton'),
   boneList: document.getElementById('boneList'),
   slotList: document.getElementById('slotList'),
+  attachmentSearchInput: document.getElementById('attachmentSearchInput'),
   attachmentList: document.getElementById('attachmentList'),
   potStatus: document.getElementById('potStatus'),
   renderResolutionTag: document.getElementById('renderResolutionTag'),
@@ -186,6 +188,8 @@ const state = {
     leg: [],
     expression: []
   },
+  animationSearchQuery: '',
+  attachmentSearchQuery: '',
   logs: []
 };
 
@@ -1253,13 +1257,50 @@ function updateClearAllSecondaryButtonState() {
   dom.clearAllSecondaryAnimationsButton.disabled = !hasAnySecondarySelection();
 }
 
-function renderEmptyAnimationList(listElement, message) {
-  listElement.innerHTML = '';
+function normalizeAnimationSearchQuery(value) {
+  return String(value || '').trim().toLowerCase();
+}
 
+function isAnimationSearchActive() {
+  return state.animationSearchQuery.length >= 2;
+}
+
+function animationNameMatchesSearch(animationName) {
+  if (!isAnimationSearchActive()) {
+    return true;
+  }
+
+  const normalizedName = getAnimationNameTokens(animationName).join(' ');
+  if (!normalizedName) {
+    return false;
+  }
+
+  if (normalizedName.includes(state.animationSearchQuery)) {
+    return true;
+  }
+
+  const queryTokens = state.animationSearchQuery.split(/\s+/).filter(Boolean);
+  return queryTokens.length > 1 && queryTokens.every((token) => normalizedName.includes(token));
+}
+
+function filterAnimationNamesBySearch(animationNames) {
+  if (!isAnimationSearchActive()) {
+    return animationNames;
+  }
+
+  return animationNames.filter((animationName) => animationNameMatchesSearch(animationName));
+}
+
+function appendEmptyAnimationListItem(listElement, message) {
   const item = document.createElement('li');
   item.className = 'animation-empty';
   item.textContent = message;
   listElement.appendChild(item);
+}
+
+function renderEmptyAnimationList(listElement, message) {
+  listElement.innerHTML = '';
+  appendEmptyAnimationListItem(listElement, message);
 }
 
 function getSecondaryListElement(type) {
@@ -1368,14 +1409,20 @@ function applySelectedAnimationLayers() {
 
 function renderAnimationControls() {
   const primaryAnimations = state.animationCatalog.primary || [];
+  const searchActive = isAnimationSearchActive();
   updateClearAllSecondaryButtonState();
 
   dom.primaryAnimationList.innerHTML = '';
+  const filteredPrimaryAnimations = filterAnimationNamesBySearch(primaryAnimations);
 
-  if (!primaryAnimations.length) {
-    renderEmptyAnimationList(dom.primaryAnimationList, 'No base animation found.');
+  if (!filteredPrimaryAnimations.length) {
+    if (searchActive && primaryAnimations.length) {
+      renderEmptyAnimationList(dom.primaryAnimationList, `No base animation matches "${state.animationSearchQuery}".`);
+    } else {
+      renderEmptyAnimationList(dom.primaryAnimationList, 'No base animation found.');
+    }
   } else {
-    for (const animationName of primaryAnimations) {
+    for (const animationName of filteredPrimaryAnimations) {
       const listItem = document.createElement('li');
       const label = document.createElement('label');
       const input = document.createElement('input');
@@ -1413,6 +1460,7 @@ function renderAnimationControls() {
   for (const type of Object.keys(SECONDARY_ANIMATION_LIMITS)) {
     const listElement = getSecondaryListElement(type);
     const items = state.animationCatalog[type] || [];
+    const filteredItems = filterAnimationNamesBySearch(items);
     listElement.innerHTML = '';
 
     if (!items.length) {
@@ -1452,7 +1500,12 @@ function renderAnimationControls() {
       noneItem.appendChild(noneLabel);
       listElement.appendChild(noneItem);
 
-      for (const animationName of items) {
+      if (!filteredItems.length && searchActive) {
+        appendEmptyAnimationListItem(listElement, `No expression part animation matches "${state.animationSearchQuery}".`);
+        continue;
+      }
+
+      for (const animationName of filteredItems) {
         const listItem = document.createElement('li');
         const label = document.createElement('label');
         const input = document.createElement('input');
@@ -1488,7 +1541,12 @@ function renderAnimationControls() {
       continue;
     }
 
-    for (const animationName of items) {
+    if (!filteredItems.length) {
+      renderEmptyAnimationList(listElement, `No ${type} part animation matches "${state.animationSearchQuery}".`);
+      continue;
+    }
+
+    for (const animationName of filteredItems) {
       const listItem = document.createElement('li');
       const label = document.createElement('label');
       const input = document.createElement('input');
@@ -1592,6 +1650,39 @@ function syncAttachmentToggleStates(spineObject) {
   }
 }
 
+function normalizeAttachmentSearchQuery(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isAttachmentSearchActive() {
+  return state.attachmentSearchQuery.length >= 2;
+}
+
+function attachmentRecordMatchesSearch(record) {
+  if (!isAttachmentSearchActive()) {
+    return true;
+  }
+  if (!record) {
+    return false;
+  }
+
+  const searchText = `${record.slotName || ''} ${record.attachmentName || ''}`.toLowerCase();
+  if (searchText.includes(state.attachmentSearchQuery)) {
+    return true;
+  }
+
+  const queryTokens = state.attachmentSearchQuery.split(/\s+/).filter(Boolean);
+  return queryTokens.length > 1 && queryTokens.every((token) => searchText.includes(token));
+}
+
+function filterAttachmentRecordsBySearch(records) {
+  if (!isAttachmentSearchActive()) {
+    return records;
+  }
+
+  return records.filter((record) => attachmentRecordMatchesSearch(record));
+}
+
 function populateAttachmentList(spineObject) {
   dom.attachmentList.innerHTML = '';
 
@@ -1654,13 +1745,23 @@ function populateAttachmentList(spineObject) {
 
   if (!sortedRecords.length) {
     const item = document.createElement('li');
+    item.className = 'animation-empty';
     item.textContent = 'No attachments found.';
     dom.attachmentList.appendChild(item);
     return;
   }
 
+  const filteredRecords = filterAttachmentRecordsBySearch(sortedRecords);
+  if (!filteredRecords.length) {
+    const item = document.createElement('li');
+    item.className = 'animation-empty';
+    item.textContent = `No attachments match "${state.attachmentSearchQuery}".`;
+    dom.attachmentList.appendChild(item);
+    return;
+  }
+
   const groupsBySlot = new Map();
-  for (const record of sortedRecords) {
+  for (const record of filteredRecords) {
     let group = groupsBySlot.get(record.slotIndex);
     if (!group) {
       group = {
@@ -2692,6 +2793,22 @@ async function handleAddSpine() {
 
 function setupUiEvents() {
   dom.addButton.addEventListener('click', handleAddSpine);
+  if (dom.animationSearchInput) {
+    dom.animationSearchInput.addEventListener('input', (event) => {
+      state.animationSearchQuery = normalizeAnimationSearchQuery(event.target.value);
+      if (state.spineObject) {
+        renderAnimationControls();
+      }
+    });
+  }
+  if (dom.attachmentSearchInput) {
+    dom.attachmentSearchInput.addEventListener('input', (event) => {
+      state.attachmentSearchQuery = normalizeAttachmentSearchQuery(event.target.value);
+      if (state.spineObject) {
+        populateAttachmentList(state.spineObject);
+      }
+    });
+  }
   if (dom.clearAllSecondaryAnimationsButton) {
     dom.clearAllSecondaryAnimationsButton.addEventListener('click', () => {
       clearAllSecondaryAnimationSelections();

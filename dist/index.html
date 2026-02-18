@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spine Mipmap Preview</title>
-    <script type="module" crossorigin src="/assets/index-95ZFeevt.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-VAgBBL0z.css">
+    <script type="module" crossorigin src="/assets/index-BqjL1a05.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CmdZ67ru.css">
   </head>
   <body>
     <div class="app-shell">
@@ -60,6 +60,16 @@
               Clear all secondary
             </button>
           </div>
+          <div class="animation-search-row">
+            <input
+              id="animationSearchInput"
+              class="animation-search-input"
+              type="search"
+              placeholder="Search animations (min 2 characters)"
+              aria-label="Search animations"
+              autocomplete="off"
+            />
+          </div>
           <div class="animation-grid">
             <details class="animation-group animation-subsection" open>
               <summary>Primary (Base)</summary>
@@ -92,6 +102,16 @@
 
         <details class="card">
           <summary>Attachments</summary>
+          <div class="animation-search-row">
+            <input
+              id="attachmentSearchInput"
+              class="animation-search-input"
+              type="search"
+              placeholder="Search attachments (min 2 characters)"
+              aria-label="Search attachments"
+              autocomplete="off"
+            />
+          </div>
           <ul id="attachmentList" class="list"></ul>
         </details>
       </aside>
