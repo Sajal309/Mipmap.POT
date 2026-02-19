@@ -235,6 +235,22 @@ body {
   font-size: 0.77rem;
 }
 
+.field-inline-toggle {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.field-inline-label {
+  color: #d8e3f8;
+  font-size: 0.78rem;
+}
+
+.field-inline-toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4f8dff;
+}
+
 input,
 select,
 button {

@@ -3,6 +3,7 @@ import { toCanonicalHumanoid } from './canonicalize.js';
 import { project3dTo2d } from './projection-2d.js';
 import { retargetToSpineAnimation } from './retarget-spine.js';
 import { mergeAnimationNonDestructive } from './spine-merge.js';
+import { convertSkeletonFromFbx } from './skeleton-convert.js';
 
 function deriveAnimationName(filename, override) {
   const trimmedOverride = String(override || '').trim();
@@ -62,20 +63,41 @@ export async function convertFbxToSpineAnimation({
     aliases: options.aliases || null
   });
 
+  let workingSpineJson = spineJson;
+  let skeletonReport = {
+    mode: 'disabled',
+    addedBones: [],
+    remappedReferences: 0,
+    compatibilityBonesAdded: [],
+    warnings: []
+  };
+
+  if (options?.skeletonConversion?.enabled) {
+    const skeletonResult = convertSkeletonFromFbx({
+      spineJson: workingSpineJson,
+      parsedFbx: parsed,
+      canonicalData: canonical,
+      profile,
+      options: options.skeletonConversion
+    });
+    workingSpineJson = skeletonResult.convertedSpineJson;
+    skeletonReport = skeletonResult.report || skeletonReport;
+  }
+
   const projected = project3dTo2d(canonical, {
     ...(profile?.projection || {}),
     ...(options.projection || {})
   });
 
   const retargeted = retargetToSpineAnimation({
-    spineJson,
+    spineJson: workingSpineJson,
     canonical2d: projected,
     profile,
     animationName: deriveAnimationName(filename, animationName),
     options
   });
 
-  const merged = mergeAnimationNonDestructive(spineJson, retargeted.animationName, retargeted.spineAnimation);
+  const merged = mergeAnimationNonDestructive(workingSpineJson, retargeted.animationName, retargeted.spineAnimation);
 
   return {
     ...retargeted,
@@ -83,6 +105,7 @@ export async function convertFbxToSpineAnimation({
     mergedSpineJson: merged.mergedSpineJson,
     previewData: buildPreviewData(parsed),
     parseWarnings: parsed.warnings || [],
-    canonicalWarnings: canonical.warnings || []
+    canonicalWarnings: canonical.warnings || [],
+    skeletonReport
   };
 }

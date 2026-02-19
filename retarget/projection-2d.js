@@ -63,6 +63,142 @@ const CHILD_BY_JOINT = Object.freeze({
   rightLeg: 'rightFoot',
   rightFoot: null
 });
+const AXIS_NAMES = Object.freeze(['x', 'y', 'z']);
+
+function normalizeAxisName(value, fallback = null) {
+  const axis = String(value || '')
+    .trim()
+    .toLowerCase();
+  return AXIS_NAMES.includes(axis) ? axis : fallback;
+}
+
+function getAxisValue(vector, axis) {
+  return toFinite(vector?.[axis], 0);
+}
+
+function averageTrackPosition(track, frameSampleCount) {
+  const positions = track?.positions || [];
+  if (!positions.length) {
+    return null;
+  }
+
+  const sampleCount = clamp(Math.floor(toFinite(frameSampleCount, 1)), 1, positions.length);
+  const sum = { x: 0, y: 0, z: 0 };
+  let valid = 0;
+  for (let index = 0; index < sampleCount; index += 1) {
+    const position = positions[index];
+    if (!position) {
+      continue;
+    }
+    sum.x += getAxisValue(position, 'x');
+    sum.y += getAxisValue(position, 'y');
+    sum.z += getAxisValue(position, 'z');
+    valid += 1;
+  }
+
+  if (!valid) {
+    return null;
+  }
+
+  return {
+    x: sum.x / valid,
+    y: sum.y / valid,
+    z: sum.z / valid
+  };
+}
+
+function computeAxisSpread(canonicalTracks) {
+  const minByAxis = { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY, z: Number.POSITIVE_INFINITY };
+  const maxByAxis = { x: Number.NEGATIVE_INFINITY, y: Number.NEGATIVE_INFINITY, z: Number.NEGATIVE_INFINITY };
+
+  for (const track of Object.values(canonicalTracks || {})) {
+    for (const position of track?.positions || []) {
+      if (!position) {
+        continue;
+      }
+      for (const axis of AXIS_NAMES) {
+        const value = getAxisValue(position, axis);
+        minByAxis[axis] = Math.min(minByAxis[axis], value);
+        maxByAxis[axis] = Math.max(maxByAxis[axis], value);
+      }
+    }
+  }
+
+  return {
+    x: Number.isFinite(minByAxis.x) && Number.isFinite(maxByAxis.x) ? Math.max(0, maxByAxis.x - minByAxis.x) : 0,
+    y: Number.isFinite(minByAxis.y) && Number.isFinite(maxByAxis.y) ? Math.max(0, maxByAxis.y - minByAxis.y) : 0,
+    z: Number.isFinite(minByAxis.z) && Number.isFinite(maxByAxis.z) ? Math.max(0, maxByAxis.z - minByAxis.z) : 0
+  };
+}
+
+function pickDominantAxis(vector, excluded = new Set()) {
+  let bestAxis = null;
+  let bestValue = Number.NEGATIVE_INFINITY;
+  for (const axis of AXIS_NAMES) {
+    if (excluded.has(axis)) {
+      continue;
+    }
+    const value = Math.abs(toFinite(vector?.[axis], 0));
+    if (value > bestValue) {
+      bestValue = value;
+      bestAxis = axis;
+    }
+  }
+  if (bestAxis) {
+    return bestAxis;
+  }
+  return AXIS_NAMES.find((axis) => !excluded.has(axis)) || 'x';
+}
+
+function resolveProjectionAxes(canonicalTracks, options, warnings) {
+  const axisMapping = options?.axisMapping || {};
+  const explicitHorizontal = normalizeAxisName(axisMapping.horizontal || options?.horizontalAxis, null);
+  const explicitVertical = normalizeAxisName(axisMapping.vertical || options?.verticalAxis, null);
+  const explicitDepth = normalizeAxisName(axisMapping.depth || options?.depthAxis, null);
+  const explicitSet = new Set([explicitHorizontal, explicitVertical, explicitDepth].filter(Boolean));
+
+  if (explicitHorizontal && explicitVertical && explicitDepth && explicitSet.size === 3) {
+    return {
+      horizontalAxis: explicitHorizontal,
+      verticalAxis: explicitVertical,
+      depthAxis: explicitDepth
+    };
+  }
+
+  const sampleCount = toFinite(options?.sourceSideCalibrationFrames, 5);
+  const spread = computeAxisSpread(canonicalTracks);
+  const hipsAverage = averageTrackPosition(canonicalTracks?.hips, sampleCount);
+  const headAverage = averageTrackPosition(canonicalTracks?.head, sampleCount) || averageTrackPosition(canonicalTracks?.neck, sampleCount);
+  const leftArmAverage = averageTrackPosition(canonicalTracks?.leftArm, sampleCount);
+  const rightArmAverage = averageTrackPosition(canonicalTracks?.rightArm, sampleCount);
+  const leftLegAverage = averageTrackPosition(canonicalTracks?.leftUpLeg, sampleCount);
+  const rightLegAverage = averageTrackPosition(canonicalTracks?.rightUpLeg, sampleCount);
+
+  const verticalVector =
+    hipsAverage && headAverage
+      ? subtractVectors(headAverage, hipsAverage)
+      : { x: spread.x, y: spread.y, z: spread.z };
+  const verticalAxis = pickDominantAxis(verticalVector);
+
+  const horizontalVector =
+    leftArmAverage && rightArmAverage
+      ? subtractVectors(leftArmAverage, rightArmAverage)
+      : leftLegAverage && rightLegAverage
+        ? subtractVectors(leftLegAverage, rightLegAverage)
+        : { x: spread.x, y: spread.y, z: spread.z };
+  const horizontalAxis = pickDominantAxis(horizontalVector, new Set([verticalAxis]));
+  const depthAxis =
+    AXIS_NAMES.find((axis) => axis !== horizontalAxis && axis !== verticalAxis) ||
+    pickDominantAxis(spread, new Set([horizontalAxis, verticalAxis]));
+
+  warnings.push(`Projection axes inferred as horizontal=${horizontalAxis}, vertical=${verticalAxis}, depth=${depthAxis}.`);
+
+  return {
+    horizontalAxis,
+    verticalAxis,
+    depthAxis
+  };
+}
 
 function vectorAngleDegrees(vector) {
   return (Math.atan2(vector.y, vector.x) * 180) / Math.PI;
@@ -147,7 +283,7 @@ function processScalarTrack(values, options) {
   return applyDeadbandSequence(smoothed, Math.max(0, toFinite(options.deadband, 0)));
 }
 
-function buildJointWorldAngleTrack(canonicalTracks, jointName, frameCount, options) {
+function buildJointWorldAngleTrack(canonicalTracks, jointName, frameCount, options, projectionAxes) {
   const joint = canonicalTracks[jointName];
   if (!joint) {
     return null;
@@ -173,16 +309,27 @@ function buildJointWorldAngleTrack(canonicalTracks, jointName, frameCount, optio
       vector = subtractVectors(current, parentJoint.positions[frameIndex]);
     }
 
-    if (!vector || magnitude2d(vector) <= 1e-5) {
+    if (!vector) {
       angles[frameIndex] = frameIndex > 0 ? angles[frameIndex - 1] : 0;
       continue;
     }
 
-    const baseAngle = vectorAngleDegrees(vector);
-    const planarLength = Math.max(1e-6, magnitude2d(vector));
-    const outOfPlaneRatio = Math.abs(vector.z) / (planarLength + Math.abs(vector.z) + 1e-6);
+    const planarVector = {
+      x: getAxisValue(vector, projectionAxes.horizontalAxis),
+      y: getAxisValue(vector, projectionAxes.verticalAxis)
+    };
+
+    if (magnitude2d(planarVector) <= 1e-5) {
+      angles[frameIndex] = frameIndex > 0 ? angles[frameIndex - 1] : 0;
+      continue;
+    }
+
+    const depthValue = getAxisValue(vector, projectionAxes.depthAxis);
+    const baseAngle = vectorAngleDegrees(planarVector);
+    const planarLength = Math.max(1e-6, magnitude2d(planarVector));
+    const outOfPlaneRatio = Math.abs(depthValue) / (planarLength + Math.abs(depthValue) + 1e-6);
     const yawSuppression = 1 - clamp(outOfPlaneRatio * toFinite(options.outOfPlaneSuppression, 0), 0, 0.95);
-    const yawContribution = (Math.atan2(vector.z, planarLength) * 180) / Math.PI;
+    const yawContribution = (Math.atan2(depthValue, planarLength) * 180) / Math.PI;
     angles[frameIndex] = baseAngle + yawContribution * toFinite(options.yawInfluence, 0) * yawSuppression;
   }
 
@@ -218,20 +365,22 @@ function buildLocalAngleTrack(worldAnglesByJoint, jointName, frameCount) {
   return localAngles;
 }
 
-function buildHipsTranslationTrack(hipsTrack, frameCount, options) {
+function buildHipsTranslationTrack(hipsTrack, frameCount, options, projectionAxes) {
   const output = new Array(frameCount).fill(null).map(() => ({ x: 0, y: 0 }));
   if (!hipsTrack?.positions?.length) {
     return output;
   }
 
-  const base = hipsTrack.positions[0] || { x: 0, y: 0 };
+  const base = hipsTrack.positions[0] || { x: 0, y: 0, z: 0 };
+  const baseHorizontal = getAxisValue(base, projectionAxes.horizontalAxis);
+  const baseVertical = getAxisValue(base, projectionAxes.verticalAxis);
   const rawX = new Array(frameCount).fill(0);
   const rawY = new Array(frameCount).fill(0);
 
   for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
     const position = hipsTrack.positions[frameIndex] || base;
-    rawX[frameIndex] = position.x - base.x;
-    rawY[frameIndex] = position.y - base.y;
+    rawX[frameIndex] = getAxisValue(position, projectionAxes.horizontalAxis) - baseHorizontal;
+    rawY[frameIndex] = getAxisValue(position, projectionAxes.verticalAxis) - baseVertical;
   }
 
   let trendX = rawX[0];
@@ -268,6 +417,10 @@ function buildHipsTranslationTrack(hipsTrack, frameCount, options) {
 }
 
 function averagePositionAxis(track, axis, frameSampleCount) {
+  if (!axis) {
+    return null;
+  }
+
   const positions = track?.positions || [];
   if (!positions.length) {
     return null;
@@ -305,9 +458,11 @@ export function project3dTo2d(canonicalData, inputOptions = {}) {
     throw new Error('No animation frames available for 3D to 2D projection.');
   }
 
+  const projectionAxes = resolveProjectionAxes(canonicalTracks, options, warnings);
+
   const worldAnglesByJoint = {};
   for (const jointName of Object.keys(canonicalTracks)) {
-    const worldAngles = buildJointWorldAngleTrack(canonicalTracks, jointName, frameCount, options);
+    const worldAngles = buildJointWorldAngleTrack(canonicalTracks, jointName, frameCount, options, projectionAxes);
     if (!worldAngles) {
       continue;
     }
@@ -324,16 +479,16 @@ export function project3dTo2d(canonicalData, inputOptions = {}) {
   }
 
   const hipsTrack = canonicalTracks.hips || null;
-  const hipsTranslation = buildHipsTranslationTrack(hipsTrack, frameCount, options);
+  const hipsTranslation = buildHipsTranslationTrack(hipsTrack, frameCount, options, projectionAxes);
 
   const leftArmX = averagePositionAxis(
     canonicalTracks.leftArm,
-    'x',
+    projectionAxes.horizontalAxis,
     toFinite(options.sourceSideCalibrationFrames, 5)
   );
   const rightArmX = averagePositionAxis(
     canonicalTracks.rightArm,
-    'x',
+    projectionAxes.horizontalAxis,
     toFinite(options.sourceSideCalibrationFrames, 5)
   );
 
@@ -352,6 +507,7 @@ export function project3dTo2d(canonicalData, inputOptions = {}) {
       leftArmX: Number.isFinite(leftArmX) ? leftArmX : null,
       rightArmX: Number.isFinite(rightArmX) ? rightArmX : null
     },
+    axisMapping: projectionAxes,
     missingCanonicalJoints: canonicalData?.missingCanonicalJoints || [],
     warnings
   };

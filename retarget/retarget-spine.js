@@ -378,6 +378,10 @@ export function retargetToSpineAnimation({ spineJson, canonical2d, profile, anim
   const setupWorldMap = buildSetupWorldX(spineJson);
   const swapSides = shouldSwapSides(canonical2d, profile, setupWorldMap, warnings);
   const timelineConfig = buildTimelineConfig(profile, options);
+  const rootMotionMode = String(options?.rootMotion || profile?.rootMotion || 'in_place')
+    .trim()
+    .toLowerCase();
+  const hipsTranslationAllowed = rootMotionMode !== 'in_place' && rootMotionMode !== 'none';
   const warningSet = new Set();
   const zeroAngles = new Array(frameTimes.length).fill(0);
 
@@ -427,7 +431,8 @@ export function retargetToSpineAnimation({ spineJson, canonical2d, profile, anim
       mappedBones.push(targetBoneName);
     }
 
-    const shouldTranslate = Boolean(typeof mappingEntry === 'object' ? mappingEntry.translate : false);
+    const shouldTranslate =
+      Boolean(typeof mappingEntry === 'object' ? mappingEntry.translate : false) && hipsTranslationAllowed;
     if (shouldTranslate && canonicalJoint === 'hips') {
       const translationScale = toFinite(profile?.translationScale, 1);
       const translationKeys = buildTranslationKeys(

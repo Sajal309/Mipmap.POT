@@ -23,6 +23,10 @@ Options:
   --profile <file>        Retarget profile JSON path (default: retarget/profile-man39.json).
   --animation-name <name> Override output animation name for single mode.
   --fps <number>          Sampling FPS (default: 30).
+  --convert-skeleton      Import/convert skeleton from FBX before animation retarget.
+  --skeleton-mode <mode>  Skeleton mode: spine-first | fbx-first (default: spine-first).
+  --skeleton-scope <mode> Skeleton scope: full-hierarchy (default: full-hierarchy).
+  --skeleton-mismatch <m> Mismatch policy: auto-add-bones | skip-missing | strict-fail (default: auto-add-bones).
   --out <file>            Output generated Spine JSON path.
   --report <file>         Output report JSON path.
 `);
@@ -88,6 +92,18 @@ function deriveAnimationNameFromFile(filePath) {
   return path.basename(filePath, path.extname(filePath));
 }
 
+function normalizeEnumOption({ value, validValues, fallback, optionName }) {
+  const normalized = String(value || fallback)
+    .trim()
+    .toLowerCase();
+  if (validValues.has(normalized)) {
+    return normalized;
+  }
+  throw new Error(
+    `Invalid ${optionName} value "${value}". Expected one of: ${Array.from(validValues).join(', ')}.`
+  );
+}
+
 async function listFbxFiles(directoryPath) {
   const entries = await fs.readdir(directoryPath, { withFileTypes: true });
   return entries
@@ -133,6 +149,25 @@ async function run() {
   }
 
   const fps = Math.max(1, Number(args.fps) || 30);
+  const skeletonConversionEnabled = Boolean(args['convert-skeleton']);
+  const skeletonMode = normalizeEnumOption({
+    value: args['skeleton-mode'],
+    validValues: new Set(['spine-first', 'fbx-first']),
+    fallback: 'spine-first',
+    optionName: '--skeleton-mode'
+  });
+  const skeletonScope = normalizeEnumOption({
+    value: args['skeleton-scope'],
+    validValues: new Set(['full-hierarchy']),
+    fallback: 'full-hierarchy',
+    optionName: '--skeleton-scope'
+  });
+  const skeletonMismatchPolicy = normalizeEnumOption({
+    value: args['skeleton-mismatch'],
+    validValues: new Set(['auto-add-bones', 'skip-missing', 'strict-fail']),
+    fallback: 'auto-add-bones',
+    optionName: '--skeleton-mismatch'
+  });
   const profilePath = resolvePath(args.profile) || DEFAULT_PROFILE_PATH;
   const outputPath = resolvePath(args.out) || defaultOutputPath(spineJsonPath);
   const reportPath = resolvePath(args.report) || defaultReportPath(spineJsonPath);
@@ -164,6 +199,7 @@ async function run() {
       mappedBones: [],
       missingCanonicalJoints: [],
       warnings: [],
+      skeletonReport: null,
       error: null,
       elapsedMs: 0
     };
@@ -176,7 +212,15 @@ async function run() {
         spineJson: mergedSpineJson,
         profile,
         animationName: singleFbxPath ? args['animation-name'] : deriveAnimationNameFromFile(filePath),
-        options: { fps }
+        options: {
+          fps,
+          skeletonConversion: {
+            enabled: skeletonConversionEnabled,
+            mode: skeletonMode,
+            scope: skeletonScope,
+            mismatchPolicy: skeletonMismatchPolicy
+          }
+        }
       });
 
       mergedSpineJson = conversion.mergedSpineJson;
@@ -187,7 +231,13 @@ async function run() {
       item.duration = conversion.duration;
       item.mappedBones = conversion.mappedBones;
       item.missingCanonicalJoints = conversion.missingCanonicalJoints;
-      item.warnings = conversion.warnings;
+      item.warnings = [
+        ...(conversion.parseWarnings || []),
+        ...(conversion.canonicalWarnings || []),
+        ...(conversion.warnings || []),
+        ...(conversion.skeletonReport?.warnings || [])
+      ];
+      item.skeletonReport = conversion.skeletonReport || null;
 
       console.log(`OK ${fileName} -> ${conversion.animationName}`);
     } catch (error) {
@@ -205,6 +255,12 @@ async function run() {
     profileId: profile.id || 'unknown-profile',
     generatedAt: new Date().toISOString(),
     fps,
+    skeletonConversion: {
+      enabled: skeletonConversionEnabled,
+      mode: skeletonMode,
+      scope: skeletonScope,
+      mismatchPolicy: skeletonMismatchPolicy
+    },
     filesProcessed: inputFiles.length,
     filesSucceeded: successCount,
     filesFailed: failureCount,

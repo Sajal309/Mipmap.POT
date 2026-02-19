@@ -66,6 +66,17 @@
                 autocomplete="off"
               />
             </label>
+            <label class="field field-inline-toggle">
+              <span class="field-inline-label">Import/convert skeleton with FBX</span>
+              <input id="retargetSkeletonConvertToggle" type="checkbox" />
+            </label>
+            <label id="retargetSkeletonModeField" class="field is-hidden">
+              <span>Skeleton conversion mode</span>
+              <select id="retargetSkeletonModeSelect">
+                <option value="spine-first">Spine-first</option>
+                <option value="fbx-first">FBX-first</option>
+              </select>
+            </label>
           </fieldset>
           <div class="button-row retarget-button-row">
             <button id="retargetPreviewButton" type="button">Convert + Preview</button>

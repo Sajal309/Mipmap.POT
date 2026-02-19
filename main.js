@@ -118,6 +118,12 @@ const FBX_PREVIEW_VIEW_MODES = Object.freeze({
   perspective: 'perspective',
   force2d: 'force2d'
 });
+const SKELETON_CONVERSION_MODES = Object.freeze({
+  spineFirst: 'spine-first',
+  fbxFirst: 'fbx-first'
+});
+const DEFAULT_SKELETON_CONVERSION_SCOPE = 'full-hierarchy';
+const DEFAULT_SKELETON_CONVERSION_MISMATCH_POLICY = 'auto-add-bones';
 const FBX_PREVIEW_SCRUB_MAX = 1000;
 const FBX_PREVIEW_DEFAULT_FPS = 30;
 const FBX_PREVIEW_PERSPECTIVE = Object.freeze({
@@ -133,6 +139,9 @@ const dom = {
   animationsInput: document.getElementById('animationsInput'),
   retargetFbxInput: document.getElementById('retargetFbxInput'),
   retargetAnimationNameInput: document.getElementById('retargetAnimationNameInput'),
+  retargetSkeletonConvertToggle: document.getElementById('retargetSkeletonConvertToggle'),
+  retargetSkeletonModeField: document.getElementById('retargetSkeletonModeField'),
+  retargetSkeletonModeSelect: document.getElementById('retargetSkeletonModeSelect'),
   retargetPreviewButton: document.getElementById('retargetPreviewButton'),
   retargetDownloadButton: document.getElementById('retargetDownloadButton'),
   retargetStatus: document.getElementById('retargetStatus'),
@@ -1399,6 +1408,57 @@ function drawFbxPreviewBackground(context, width, height, viewMode) {
   context.fillText(viewMode === FBX_PREVIEW_VIEW_MODES.force2d ? 'Force 2D' : 'Perspective', 8, 7);
 }
 
+function colorIntToRgbaString(colorInt, alpha = 1) {
+  const safeColor = Number.isFinite(colorInt) ? (Math.floor(colorInt) >>> 0) : 0;
+  const clampedAlpha = clamp(Number(alpha) || 0, 0, 1);
+  const red = (safeColor >> 16) & 255;
+  const green = (safeColor >> 8) & 255;
+  const blue = safeColor & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${clampedAlpha})`;
+}
+
+function getFbxPreviewBoneWidth(lengthPx) {
+  const widthFromLength = Math.max(0, lengthPx) / SKELETON_OVERLAY_STYLE.lengthToWidthRatio;
+  return clamp(widthFromLength, SKELETON_OVERLAY_STYLE.minBoneWidthPx, SKELETON_OVERLAY_STYLE.maxBoneWidthPx);
+}
+
+function getFbxPreviewJointRadius(boneWidth) {
+  return clamp(
+    Math.max(boneWidth * SKELETON_OVERLAY_STYLE.jointRadiusScale, SKELETON_OVERLAY_STYLE.minJointRadiusPx),
+    SKELETON_OVERLAY_STYLE.minJointRadiusPx,
+    SKELETON_OVERLAY_STYLE.maxJointRadiusPx
+  );
+}
+
+function drawFbxPreviewBoneShape(context, fromPoint, toPoint, boneWidth) {
+  const deltaX = toPoint.screenX - fromPoint.screenX;
+  const deltaY = toPoint.screenY - fromPoint.screenY;
+  const length = Math.hypot(deltaX, deltaY);
+  if (!Number.isFinite(length) || length <= 0.0001) {
+    return;
+  }
+
+  const directionX = deltaX / length;
+  const directionY = deltaY / length;
+  const perpendicularX = -directionY;
+  const perpendicularY = directionX;
+  const taperInset = Math.min(length * SKELETON_OVERLAY_STYLE.taperRatio, boneWidth * SKELETON_OVERLAY_STYLE.taperWidthScale);
+  const neckDistance = Math.max(length - taperInset, 0);
+
+  const leftX = fromPoint.screenX + (directionX * neckDistance) - (perpendicularX * boneWidth);
+  const leftY = fromPoint.screenY + (directionY * neckDistance) - (perpendicularY * boneWidth);
+  const rightX = fromPoint.screenX + (directionX * neckDistance) + (perpendicularX * boneWidth);
+  const rightY = fromPoint.screenY + (directionY * neckDistance) + (perpendicularY * boneWidth);
+
+  context.beginPath();
+  context.moveTo(fromPoint.screenX, fromPoint.screenY);
+  context.lineTo(leftX, leftY);
+  context.lineTo(toPoint.screenX, toPoint.screenY);
+  context.lineTo(rightX, rightY);
+  context.closePath();
+  context.fill();
+}
+
 function drawFbxPreviewSkeleton(sample) {
   const canvas = dom.fbxPreviewCanvas;
   if (!canvas) {
@@ -1472,35 +1532,70 @@ function drawFbxPreviewSkeleton(sample) {
     });
   }
 
+  const segments = [];
+  const jointRadiusByName = new Map();
+  const registerJointRadius = (jointName, radius) => {
+    if (!jointName || !Number.isFinite(radius)) {
+      return;
+    }
+    const existing = jointRadiusByName.get(jointName);
+    if (!Number.isFinite(existing) || radius > existing) {
+      jointRadiusByName.set(jointName, radius);
+    }
+  };
+
+  for (const point of screenPointByName.values()) {
+    if (!point.parentName) {
+      registerJointRadius(point.name, SKELETON_OVERLAY_STYLE.minJointRadiusPx);
+      continue;
+    }
+    const parent = screenPointByName.get(point.parentName);
+    if (!parent) {
+      registerJointRadius(point.name, SKELETON_OVERLAY_STYLE.minJointRadiusPx);
+      continue;
+    }
+
+    const segmentLength = Math.hypot(point.screenX - parent.screenX, point.screenY - parent.screenY);
+    const boneWidth = getFbxPreviewBoneWidth(segmentLength);
+    segments.push({
+      fromPoint: parent,
+      toPoint: point,
+      boneWidth
+    });
+
+    const jointRadius = getFbxPreviewJointRadius(boneWidth);
+    registerJointRadius(parent.name, jointRadius);
+    registerJointRadius(point.name, jointRadius);
+  }
+
   if (state.fbxPreviewShowBones) {
-    context.strokeStyle = 'rgba(70, 240, 220, 0.92)';
-    context.lineWidth = 2;
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    for (const point of screenPointByName.values()) {
-      if (!point.parentName) {
-        continue;
-      }
-      const parent = screenPointByName.get(point.parentName);
-      if (!parent) {
-        continue;
-      }
-      context.beginPath();
-      context.moveTo(parent.screenX, parent.screenY);
-      context.lineTo(point.screenX, point.screenY);
-      context.stroke();
+    context.fillStyle = colorIntToRgbaString(SKELETON_OVERLAY_STYLE.boneColor, SKELETON_OVERLAY_STYLE.boneAlpha);
+    for (const segment of segments) {
+      drawFbxPreviewBoneShape(context, segment.fromPoint, segment.toPoint, segment.boneWidth);
     }
   }
 
   if (state.fbxPreviewShowJoints) {
+    context.fillStyle = colorIntToRgbaString(SKELETON_OVERLAY_STYLE.jointOuterColor, SKELETON_OVERLAY_STYLE.jointOuterAlpha);
     for (const point of screenPointByName.values()) {
-      context.fillStyle = '#b7fff2';
+      const jointRadius = jointRadiusByName.get(point.name) || SKELETON_OVERLAY_STYLE.minJointRadiusPx;
       context.beginPath();
-      context.arc(point.screenX, point.screenY, 2.3, 0, Math.PI * 2);
+      context.arc(point.screenX, point.screenY, jointRadius, 0, Math.PI * 2);
       context.fill();
-      context.fillStyle = '#0a2022';
+    }
+
+    context.fillStyle = colorIntToRgbaString(SKELETON_OVERLAY_STYLE.jointInnerColor, SKELETON_OVERLAY_STYLE.jointInnerAlpha);
+    for (const point of screenPointByName.values()) {
+      const jointRadius = jointRadiusByName.get(point.name) || SKELETON_OVERLAY_STYLE.minJointRadiusPx;
+      const jointInnerRadius = Math.max(
+        Math.min(jointRadius * SKELETON_OVERLAY_STYLE.jointInnerRadiusRatio, jointRadius - 0.0001),
+        0
+      );
+      if (jointInnerRadius <= 0.0001) {
+        continue;
+      }
       context.beginPath();
-      context.arc(point.screenX, point.screenY, 1.1, 0, Math.PI * 2);
+      context.arc(point.screenX, point.screenY, jointInnerRadius, 0, Math.PI * 2);
       context.fill();
     }
   }
@@ -4339,6 +4434,13 @@ function setRetargetBusy(isBusy) {
   if (dom.retargetDownloadButton) {
     dom.retargetDownloadButton.disabled = state.retargetBusy;
   }
+  if (dom.retargetSkeletonConvertToggle) {
+    dom.retargetSkeletonConvertToggle.disabled = state.retargetBusy;
+  }
+  if (dom.retargetSkeletonModeSelect) {
+    dom.retargetSkeletonModeSelect.disabled =
+      state.retargetBusy || !Boolean(dom.retargetSkeletonConvertToggle?.checked);
+  }
 }
 
 function cloneBundleFiles(bundle) {
@@ -4436,6 +4538,48 @@ function getRetargetAnimationNameOverride() {
   return String(dom.retargetAnimationNameInput?.value || '').trim() || null;
 }
 
+function syncRetargetSkeletonModeVisibility() {
+  const skeletonConversionEnabled = Boolean(dom.retargetSkeletonConvertToggle?.checked);
+  if (dom.retargetSkeletonModeField) {
+    dom.retargetSkeletonModeField.classList.toggle('is-hidden', !skeletonConversionEnabled);
+  }
+  if (dom.retargetSkeletonModeSelect) {
+    dom.retargetSkeletonModeSelect.disabled = state.retargetBusy || !skeletonConversionEnabled;
+  }
+}
+
+function getRetargetSkeletonConversionOptions() {
+  const enabled = Boolean(dom.retargetSkeletonConvertToggle?.checked);
+  const requestedMode = String(dom.retargetSkeletonModeSelect?.value || SKELETON_CONVERSION_MODES.spineFirst)
+    .trim()
+    .toLowerCase();
+  const mode =
+    requestedMode === SKELETON_CONVERSION_MODES.fbxFirst
+      ? SKELETON_CONVERSION_MODES.fbxFirst
+      : SKELETON_CONVERSION_MODES.spineFirst;
+
+  return {
+    enabled,
+    mode,
+    scope: DEFAULT_SKELETON_CONVERSION_SCOPE,
+    mismatchPolicy: DEFAULT_SKELETON_CONVERSION_MISMATCH_POLICY
+  };
+}
+
+function summarizeSkeletonReport(skeletonReport) {
+  if (!skeletonReport || skeletonReport.mode === 'disabled') {
+    return null;
+  }
+
+  const added = Array.isArray(skeletonReport.addedBones) ? skeletonReport.addedBones.length : 0;
+  const remapped = Number.isFinite(skeletonReport.remappedReferences) ? skeletonReport.remappedReferences : 0;
+  const compatibility = Array.isArray(skeletonReport.compatibilityBonesAdded)
+    ? skeletonReport.compatibilityBonesAdded.length
+    : 0;
+
+  return `Skeleton ${skeletonReport.mode}: +${added} bone(s), ${remapped} remap(s), ${compatibility} compatibility bone(s).`;
+}
+
 function buildGeneratedSpineFile(targetFile, mergedSpineJson) {
   const stem = (targetFile?.name || 'character').replace(/\.[^.]+$/, '');
   const outputName = `${stem}.generated.json`;
@@ -4477,7 +4621,11 @@ async function handleFbxRetargetAction({ preview = false, download = false } = {
 
     const sourceLabel =
       retargetSource === 'loaded' ? 'loaded character bundle' : 'default powerof2/Man_39 bundle';
-    setRetargetStatus(`Converting ${fbxFiles.length} FBX animation(s) using ${sourceLabel}...`);
+    const skeletonConversion = getRetargetSkeletonConversionOptions();
+    const skeletonModeLabel = skeletonConversion.enabled
+      ? `with ${skeletonConversion.mode} skeleton conversion`
+      : 'animation-only mode';
+    setRetargetStatus(`Converting ${fbxFiles.length} FBX animation(s) in ${skeletonModeLabel} using ${sourceLabel}...`);
 
     const targetJsonText = await targetSpineFile.text();
     let targetSpineJson;
@@ -4493,6 +4641,7 @@ async function handleFbxRetargetAction({ preview = false, download = false } = {
     const fbxPreviewMap = new Map();
     const failedFiles = [];
     const allWarnings = [];
+    const skeletonSummaryLines = [];
 
     for (let index = 0; index < fbxFiles.length; index += 1) {
       const fbxFile = fbxFiles[index];
@@ -4507,7 +4656,8 @@ async function handleFbxRetargetAction({ preview = false, download = false } = {
           animationName: fbxFiles.length === 1 ? animationOverride : null,
           options: {
             rootMotion: 'in_place',
-            fps: 30
+            fps: 30,
+            skeletonConversion
           }
         });
 
@@ -4517,6 +4667,17 @@ async function handleFbxRetargetAction({ preview = false, download = false } = {
           fbxPreviewMap.set(conversion.animationName, conversion.previewData);
         }
         allWarnings.push(...(conversion.parseWarnings || []), ...(conversion.canonicalWarnings || []), ...(conversion.warnings || []));
+
+        const skeletonReport = conversion.skeletonReport || null;
+        if (skeletonReport?.mode && skeletonReport.mode !== 'disabled') {
+          const summary = summarizeSkeletonReport(skeletonReport);
+          if (summary) {
+            skeletonSummaryLines.push(`${fbxFile.name}: ${summary}`);
+          }
+          for (const warning of skeletonReport.warnings || []) {
+            allWarnings.push(`SKELETON ${fbxFile.name}: ${warning}`);
+          }
+        }
       } catch (error) {
         const message = error?.message || 'unknown conversion failure';
         failedFiles.push(`${fbxFile.name}: ${message}`);
@@ -4528,9 +4689,12 @@ async function handleFbxRetargetAction({ preview = false, download = false } = {
     }
 
     const generatedJsonFile = buildGeneratedSpineFile(targetSpineFile, mergedSpineJson);
-    const warningMessages = [...allWarnings, ...failedFiles.map((line) => `FAILED ${line}`)];
+    const warningMessages = [...allWarnings, ...skeletonSummaryLines, ...failedFiles.map((line) => `FAILED ${line}`)];
     const statusTone = failedFiles.length ? 'warn' : 'info';
     let savedToHistory = false;
+    const skeletonStatusSuffix = skeletonConversion.enabled
+      ? ` using ${skeletonConversion.mode} skeleton conversion`
+      : '';
 
     if (download) {
       downloadFile(generatedJsonFile);
@@ -4551,7 +4715,7 @@ async function handleFbxRetargetAction({ preview = false, download = false } = {
       });
       savedToHistory = true;
       setRetargetStatus(
-        `Converted and previewed ${successfulConversions.length}/${fbxFiles.length} FBX animations. Saved to history.`,
+        `Converted and previewed ${successfulConversions.length}/${fbxFiles.length} FBX animations${skeletonStatusSuffix}. Saved to history.`,
         statusTone
       );
     } else {
@@ -4575,12 +4739,12 @@ async function handleFbxRetargetAction({ preview = false, download = false } = {
       syncFbxPreviewContext();
       if (download) {
         setRetargetStatus(
-          `Converted ${successfulConversions.length}/${fbxFiles.length} FBX animations and downloaded "${generatedJsonFile.name}"${savedToHistory ? '. Saved to history.' : '.'}`,
+          `Converted ${successfulConversions.length}/${fbxFiles.length} FBX animations${skeletonStatusSuffix} and downloaded "${generatedJsonFile.name}"${savedToHistory ? '. Saved to history.' : '.'}`,
           statusTone
         );
       } else {
         setRetargetStatus(
-          `Converted ${successfulConversions.length}/${fbxFiles.length} FBX animations${savedToHistory ? '. Saved to history.' : '.'}`,
+          `Converted ${successfulConversions.length}/${fbxFiles.length} FBX animations${skeletonStatusSuffix}${savedToHistory ? '. Saved to history.' : '.'}`,
           statusTone
         );
       }
@@ -4844,6 +5008,26 @@ async function handleAddSpine() {
 
 function setupUiEvents() {
   dom.addButton.addEventListener('click', handleAddSpine);
+  if (dom.retargetSkeletonConvertToggle) {
+    dom.retargetSkeletonConvertToggle.checked = false;
+    dom.retargetSkeletonConvertToggle.addEventListener('change', () => {
+      syncRetargetSkeletonModeVisibility();
+    });
+  }
+  if (dom.retargetSkeletonModeSelect) {
+    dom.retargetSkeletonModeSelect.value = SKELETON_CONVERSION_MODES.spineFirst;
+    dom.retargetSkeletonModeSelect.addEventListener('change', (event) => {
+      const requestedMode = String(event.target.value || SKELETON_CONVERSION_MODES.spineFirst)
+        .trim()
+        .toLowerCase();
+      event.target.value =
+        requestedMode === SKELETON_CONVERSION_MODES.fbxFirst
+          ? SKELETON_CONVERSION_MODES.fbxFirst
+          : SKELETON_CONVERSION_MODES.spineFirst;
+    });
+  }
+  syncRetargetSkeletonModeVisibility();
+
   if (dom.retargetPreviewButton) {
     dom.retargetPreviewButton.addEventListener('click', () => {
       handleFbxRetargetAction({ preview: true, download: false });

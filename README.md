@@ -44,6 +44,10 @@ This project now includes an FBX-to-Spine retarget flow for `powerof2/Man_39.jso
   - No extra skeleton picker needed:
     - Uses the currently loaded character bundle automatically
     - Falls back to `powerof2/Man_39` when nothing is loaded
+  - Optional one-click skeleton conversion:
+    - `Import/convert skeleton with FBX` (default: OFF)
+    - `Spine-first` mode (default when enabled): keeps current Spine skeleton and auto-adds/matches missing FBX bones
+    - `FBX-first` mode: rebuilds around FBX hierarchy and remaps Spine references with compatibility fallbacks
   - `Convert + Preview` to inject all converted FBX animations and play immediately
   - `Convert + Download` to save the merged generated Spine JSON
   - Generated preview bundles are added to **Character history** for one-click reload
@@ -77,15 +81,35 @@ Generated outputs are non-destructive by default:
 - `<spine-base>.generated.json`
 - `<spine-base>.generated.report.json`
 
+### Skeleton conversion options
+
+Both UI and CLI support skeleton conversion options:
+
+- `--convert-skeleton`
+- `--skeleton-mode spine-first|fbx-first` (default: `spine-first`)
+- `--skeleton-scope full-hierarchy` (default: `full-hierarchy`)
+- `--skeleton-mismatch auto-add-bones|skip-missing|strict-fail` (default: `auto-add-bones`)
+
+Example:
+
+```bash
+node scripts/fbx-retarget.mjs \
+  --fbx ./FBX/26_10.fbx \
+  --spine-json ./powerof2/Man_39.json \
+  --convert-skeleton \
+  --skeleton-mode spine-first
+```
+
 ### Retargeting defaults and limits
 
 - Humanoid, Mixamo-first joint alias mapping
-- Core body bones only in V1 (no face/finger synthesis)
+- Animation retargeting focuses on humanoid core joints; skeleton conversion imports full FBX hierarchy
 - Root motion mode: `in_place`
 - 3D-to-2D projection mode: stability-first (angle unwrap + delta clamp + jitter deadband)
 - Animation name collisions are auto-suffixed (`_fbx`, `_fbx_2`, ...)
 - Runtime enforces setup-pose draw order while FBX animations are active
 - Preview default attachment override: `TORSO` slot starts as OFF
+- `fbx-first` mode preserves compatibility by remapping references and adding fallback bones if needed
 
 ## Runtime behavior
 

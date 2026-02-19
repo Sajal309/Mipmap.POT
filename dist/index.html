@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spine Mipmap Preview</title>
-    <script type="module" crossorigin src="/assets/index-9lvyQ92Q.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CzoI_n_W.css">
+    <script type="module" crossorigin src="/assets/index-CEYH4OYM.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-6ifsRoFl.css">
   </head>
   <body>
     <div class="app-shell">
@@ -66,6 +66,17 @@
                 placeholder="Default: FBX filename"
                 autocomplete="off"
               />
+            </label>
+            <label class="field field-inline-toggle">
+              <span class="field-inline-label">Import/convert skeleton with FBX</span>
+              <input id="retargetSkeletonConvertToggle" type="checkbox" />
+            </label>
+            <label id="retargetSkeletonModeField" class="field is-hidden">
+              <span>Skeleton conversion mode</span>
+              <select id="retargetSkeletonModeSelect">
+                <option value="spine-first">Spine-first</option>
+                <option value="fbx-first">FBX-first</option>
+              </select>
             </label>
           </fieldset>
           <div class="button-row retarget-button-row">
