@@ -1,0 +1,80 @@
+{
+  "id": "man39_mixamo_core_v1",
+  "targetSkeleton": "powerof2/Man_39.json",
+  "rootMotion": "in_place",
+  "translationScale": 0.45,
+  "targetBones": {
+    "hips": { "bone": "bone", "translate": true },
+    "spine": "TORSO",
+    "spine1": "TORSO2",
+    "spine2": "TORSO3",
+    "neck": "NECK",
+    "head": "HEAD",
+    "leftArm": "ARM_L",
+    "leftForeArm": "FOREARM_R",
+    "leftHand": "L_Palm",
+    "rightArm": "ARM_R",
+    "rightForeArm": "FOREARM_L",
+    "rightHand": "R_Palm",
+    "leftUpLeg": "2",
+    "leftLeg": "3",
+    "leftFoot": "4",
+    "rightUpLeg": "bone3",
+    "rightLeg": "bone4",
+    "rightFoot": "bone6"
+  },
+  "sideCalibration": {
+    "sourceLeftJoint": "leftArm",
+    "sourceRightJoint": "rightArm",
+    "targetLeftBone": "ARM_L",
+    "targetRightBone": "ARM_R"
+  },
+  "projection": {
+    "maxDeltaDeg": 70,
+    "angleMedianWindow": 5,
+    "angleSmoothingAlpha": 0.55,
+    "angleSmoothingPasses": 2,
+    "angleDeadbandDeg": 0.02,
+    "translationMedianWindow": 5,
+    "translationSmoothingAlpha": 0.5,
+    "translationSmoothingPasses": 2,
+    "translationDeadband": 0.01,
+    "inPlaceTrendAlpha": 0.03,
+    "yawInfluence": 0.05,
+    "outOfPlaneSuppression": 0.85,
+    "sourceSideCalibrationFrames": 5
+  },
+  "timeline": {
+    "uniformKeyframes": true,
+    "reduceRotationKeys": false,
+    "reduceTranslationKeys": false,
+    "fillMissingWithZero": true,
+    "referenceFrameCount": 3
+  },
+  "limits": {
+    "minAngle": -175,
+    "maxAngle": 175,
+    "rotationEpsilonDeg": 0.08,
+    "translationEpsilon": 0.03
+  },
+  "jointAdjustments": {
+    "hips": { "multiplier": 1.0, "offset": 0 },
+    "spine": { "multiplier": 1.0, "offset": 0 },
+    "spine1": { "multiplier": 1.0, "offset": 0 },
+    "spine2": { "multiplier": 1.0, "offset": 0 },
+    "neck": { "multiplier": 1.0, "offset": 0 },
+    "head": { "multiplier": 1.0, "offset": 0 },
+    "leftArm": { "multiplier": 1.0, "offset": 0 },
+    "leftForeArm": { "multiplier": 1.0, "offset": 0 },
+    "leftHand": { "multiplier": 1.0, "offset": 0 },
+    "rightArm": { "multiplier": 1.0, "offset": 0 },
+    "rightForeArm": { "multiplier": 1.0, "offset": 0 },
+    "rightHand": { "multiplier": 1.0, "offset": 0 },
+    "leftUpLeg": { "multiplier": 1.0, "offset": 0 },
+    "leftLeg": { "multiplier": 1.0, "offset": 0 },
+    "leftFoot": { "multiplier": 1.0, "offset": 0 },
+    "rightUpLeg": { "multiplier": 1.0, "offset": 0 },
+    "rightLeg": { "multiplier": 1.0, "offset": 0 },
+    "rightFoot": { "multiplier": 1.0, "offset": 0 }
+  }
+}

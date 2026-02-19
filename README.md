@@ -20,13 +20,13 @@ Open the Vite URL in your browser.
 ## How to use
 
 1. In **Add spine**, upload:
-   1. `image` (`.png`, one or more)
+   1. `image` (`.png` or `.webp`, one or more)
    2. `atlas` (`.atlas`)
    3. `json` (skeleton `.json`)
 2. Click **Add**.
 3. Use controls:
    - **Mipmaps ON/OFF**
-   - **Manual POT override** with POT width/height (pads pages without scaling)
+   - **Manual POT (2048 base)** to repack NPOT atlas content into POT at runtime (auto-bumps if needed)
    - **Scale test 0.25x / 0.5x / 1.0x**
    - **Pan test ON/OFF**
 4. In **Animations**, choose one **Primary (Base)** animation and optionally add secondary overlays:
@@ -35,14 +35,66 @@ Open the Vite URL in your browser.
    - Expression: up to 1
 5. Loaded characters are saved to **Character history**; click an entry to reload instantly without reuploading files.
 
+## FBX retarget pipeline (Man_39)
+
+This project now includes an FBX-to-Spine retarget flow for `powerof2/Man_39.json`:
+
+- **Frontend panel**: use **FBX Retarget** in the left sidebar.
+  - Pick one or more `.fbx` files (multi-select)
+  - No extra skeleton picker needed:
+    - Uses the currently loaded character bundle automatically
+    - Falls back to `powerof2/Man_39` when nothing is loaded
+  - `Convert + Preview` to inject all converted FBX animations and play immediately
+  - `Convert + Download` to save the merged generated Spine JSON
+  - Generated preview bundles are added to **Character history** for one-click reload
+  - Converted clips are grouped in a dedicated **FBX (Generated)** animation section
+- **CLI (single)**:
+
+```bash
+npm run retarget:one
+```
+
+Equivalent explicit command:
+
+```bash
+node scripts/fbx-retarget.mjs --fbx ./FBX/26_10.fbx --spine-json ./powerof2/Man_39.json
+```
+
+- **CLI (batch)**:
+
+```bash
+npm run retarget:batch
+```
+
+Equivalent explicit command:
+
+```bash
+node scripts/fbx-retarget.mjs --fbx-dir ./FBX --spine-json ./powerof2/Man_39.json
+```
+
+Generated outputs are non-destructive by default:
+
+- `<spine-base>.generated.json`
+- `<spine-base>.generated.report.json`
+
+### Retargeting defaults and limits
+
+- Humanoid, Mixamo-first joint alias mapping
+- Core body bones only in V1 (no face/finger synthesis)
+- Root motion mode: `in_place`
+- 3D-to-2D projection mode: stability-first (angle unwrap + delta clamp + jitter deadband)
+- Animation name collisions are auto-suffixed (`_fbx`, `_fbx_2`, ...)
+- Runtime enforces setup-pose draw order while FBX animations are active
+- Preview default attachment override: `TORSO` slot starts as OFF
+
 ## Runtime behavior
 
 - Loads from local `File` objects using `URL.createObjectURL`.
-- Parses atlas text and patches atlas page references to blob URLs.
+- Parses atlas text and resolves page names against uploaded image files.
 - Supports multi-page atlases when all referenced page images are uploaded.
-- If atlas page names do not match uploaded PNG names, runtime auto-maps and warns.
+- If atlas page names do not match uploaded image names, runtime auto-maps and warns.
 - Revokes object URLs on reload to avoid leaks.
-- Optional manual POT override pads each atlas page to chosen POT width/height before load (no atlas coordinate distortion).
+- Optional manual POT mode repacks NPOT regions natively into a single POT atlas page (2048x2048 first, then smallest fitting POT auto-bump).
 - Character bundles are persisted in IndexedDB and can be reloaded from the sidebar history section.
 
 ## Mipmap verification (required checks)
@@ -71,7 +123,7 @@ Compare shimmer while downscaled:
 2. Turn **Pan test ON**.
 3. Set mipmaps OFF and inspect edges.
 4. Set mipmaps ON and compare reduced shimmer/aliasing.
-5. Optional: enable manual POT override (e.g. `2048x2048`) when source pages are NPOT to test mipmap path.
+5. Optional: enable Manual POT to repack NPOT atlases at runtime and retest mipmaps on the generated POT texture.
 
 UI reminder: _For best test, set scale to 0.25-0.4 and watch edges during motion._
 
@@ -91,7 +143,7 @@ Overlay displays:
 
 ### Atlas filename mismatch
 
-If atlas page names differ from uploaded PNG names, runtime maps available files and patches page lines to blob URLs. A warning is shown in the sidebar.
+If atlas page names differ from uploaded image names, runtime maps available files and patches page lines to blob URLs. A warning is shown in the sidebar.
 
 ### Missing regions / missing page images
 
@@ -99,7 +151,7 @@ If atlas references pages that were not uploaded, load fails with a clear list o
 
 ### NPOT textures
 
-If a page is non-power-of-two, runtime marks `Texture POT: NO (...)`, disables mipmaps, and explains why. For WebGL1 this avoids unsupported NPOT mipmapping behavior.
+If a page is non-power-of-two, runtime marks `Texture POT: NO (...)`, disables mipmaps, and explains why. Enabling **Manual POT** repacks NPOT regions into a POT atlas at runtime so mipmaps can be validated without re-exporting from Spine.
 
 ### GL filter not sticking
 
@@ -159,9 +211,11 @@ Example entry:
   "animations": "shared-history/hero/hero-animations.json",
   "preview": "shared-history/hero/hero.png",
   "mipmapsEnabled": true,
-  "potOverride": { "width": 2048, "height": 2048 }
+  "potOverride": true
 }
 ```
+
+`potOverride` also accepts legacy object values (for example `{"width":2048,"height":2048}`); any truthy override enables fixed 2048-base Manual POT mode.
 
 ### Migrate characters you already uploaded on the live site
 

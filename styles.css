@@ -119,6 +119,10 @@ body {
   margin-bottom: 10px;
 }
 
+.is-hidden {
+  display: none !important;
+}
+
 .card summary {
   cursor: pointer;
   list-style: none;
@@ -238,6 +242,7 @@ button {
 }
 
 input[type='number'],
+input[type='text'],
 select {
   width: 100%;
   border: 1px solid var(--border-soft);
@@ -335,6 +340,56 @@ button:hover {
   margin: 6px 0 0;
   font-size: 0.74rem;
   color: var(--text-muted);
+}
+
+.fbx-preview-surface {
+  margin-top: 8px;
+  border: 1px solid #2f3d56;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #111926 0%, #0e151f 100%);
+  overflow: hidden;
+}
+
+#fbxPreviewCanvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  aspect-ratio: 16 / 10;
+}
+
+.fbx-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.fbx-preview-grid .field,
+.fbx-preview-playback .field {
+  margin-bottom: 0;
+}
+
+.fbx-preview-playback {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(92px, 0.9fr);
+  gap: 8px;
+  margin-top: 8px;
+  align-items: end;
+}
+
+#fbxPreviewScrubber {
+  width: 100%;
+}
+
+.fbx-preview-overlays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.fbx-preview-overlays .toggle {
+  margin: 0;
 }
 
 .animation-grid {
@@ -470,6 +525,7 @@ button:hover {
 
 /* Hard-pin spacing for all animation lists (including Primary/Base). */
 #primaryAnimationList,
+#fbxAnimationList,
 #secondaryHandAnimationList,
 #secondaryLegAnimationList,
 #secondaryExpressionAnimationList {
@@ -484,6 +540,7 @@ button:hover {
 }
 
 #primaryAnimationList > li,
+#fbxAnimationList > li,
 #secondaryHandAnimationList > li,
 #secondaryLegAnimationList > li,
 #secondaryExpressionAnimationList > li {
@@ -676,18 +733,15 @@ button:hover {
   overflow-wrap: anywhere;
 }
 
-.pot-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 6px 0;
-}
-
 .button-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
   margin: 8px 0;
+}
+
+.retarget-button-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .badge {
@@ -938,7 +992,7 @@ button:hover {
 .screen-zoom-controls {
   position: absolute;
   right: 10px;
-  bottom: 10px;
+  bottom: 50px;
   z-index: 3;
   display: inline-flex;
   flex-direction: column;
@@ -964,6 +1018,37 @@ button:hover {
 }
 
 .screen-zoom-controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  background: rgba(9, 13, 20, 0.55);
+}
+
+.screen-skeleton-toggle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+}
+
+.screen-skeleton-toggle button {
+  min-width: 98px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(178, 201, 237, 0.52);
+  padding: 0 10px;
+  font-size: 0.75rem;
+  font-weight: 620;
+  letter-spacing: 0.02em;
+  color: #f0f7ff;
+  background: rgba(9, 13, 20, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.screen-skeleton-toggle button:hover {
+  background: rgba(28, 39, 57, 0.85);
+}
+
+.screen-skeleton-toggle button:disabled {
   opacity: 0.45;
   cursor: default;
   background: rgba(9, 13, 20, 0.55);
@@ -1172,6 +1257,11 @@ button:hover {
   .panel-right {
     border-left: 0;
     border-top: 1px solid var(--border);
+  }
+
+  .fbx-preview-grid,
+  .fbx-preview-playback {
+    grid-template-columns: 1fr;
   }
 
   .stage-wrap {

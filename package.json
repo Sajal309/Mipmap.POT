@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "retarget:one": "node scripts/fbx-retarget.mjs --fbx ./FBX/26_10.fbx --spine-json ./powerof2/Man_39.json",
+    "retarget:batch": "node scripts/fbx-retarget.mjs --fbx-dir ./FBX --spine-json ./powerof2/Man_39.json"
   },
   "dependencies": {
     "pixi-spine": "^3.1.2",
-    "pixi.js": "^6.5.10"
+    "pixi.js": "^6.5.10",
+    "three": "^0.183.0"
   },
   "devDependencies": {
     "vite": "^5.4.10"

@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spine Mipmap Preview</title>
-    <script type="module" crossorigin src="/assets/index-BqjL1a05.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CmdZ67ru.css">
+    <script type="module" crossorigin src="/assets/index-9lvyQ92Q.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CzoI_n_W.css">
   </head>
   <body>
     <div class="app-shell">
@@ -21,8 +21,8 @@
             <legend>Required</legend>
             <p id="requiredHint" class="assistive">Add all required files.</p>
             <label class="field">
-              <span>Images (.png)</span>
-              <input id="imageInput" type="file" accept=".png,image/png" multiple required />
+              <span>Images (.png/.webp)</span>
+              <input id="imageInput" type="file" accept=".png,.webp,image/png,image/webp" multiple required />
             </label>
             <label class="field">
               <span>Atlas (.atlas)</span>
@@ -46,13 +46,43 @@
           <div id="warnings" class="warnings" role="status" aria-live="polite"></div>
         </details>
 
+        <details class="card card-priority">
+          <summary>FBX Retarget</summary>
+          <fieldset class="field-group">
+            <legend>Input</legend>
+            <label class="field">
+              <span>FBX animations (.fbx, multi-select)</span>
+              <input id="retargetFbxInput" type="file" accept=".fbx,application/octet-stream" multiple />
+            </label>
+            <p class="assistive">
+              Uses the currently loaded character automatically. If none is loaded, defaults to
+              <code>powerof2/Man_39</code>.
+            </p>
+            <label class="field">
+              <span>Animation name override</span>
+              <input
+                id="retargetAnimationNameInput"
+                type="text"
+                placeholder="Default: FBX filename"
+                autocomplete="off"
+              />
+            </label>
+          </fieldset>
+          <div class="button-row retarget-button-row">
+            <button id="retargetPreviewButton" type="button">Convert + Preview</button>
+            <button id="retargetDownloadButton" type="button">Convert + Download</button>
+          </div>
+          <p id="retargetStatus" class="status-line">Waiting for FBX input.</p>
+          <pre id="retargetWarnings" class="panel-log">No conversion report yet.</pre>
+        </details>
+
         <details class="card" open>
           <summary>History</summary>
           <p id="historyStatus" class="status-line">Loading...</p>
           <ul id="historyList" class="list history-list"></ul>
         </details>
 
-        <details class="card" open>
+        <details class="card">
           <summary>Animations</summary>
           <div class="animation-toolbar">
             <p id="animationSelectionSummary" class="hint">Load a character to configure primary and secondary layers.</p>
@@ -74,6 +104,10 @@
             <details class="animation-group animation-subsection" open>
               <summary>Primary (Base)</summary>
               <ul id="primaryAnimationList" class="list animation-list"></ul>
+            </details>
+            <details class="animation-group animation-subsection" open>
+              <summary>FBX (Generated)</summary>
+              <ul id="fbxAnimationList" class="list animation-list"></ul>
             </details>
             <details class="animation-group animation-subsection">
               <summary>Secondary Hand Part (0-2)</summary>
@@ -125,6 +159,17 @@
                 <button id="localZoomOut" type="button" aria-label="Zoom out emulator screen">-</button>
                 <button id="localZoomIn" type="button" aria-label="Zoom in emulator screen">+</button>
               </div>
+              <div class="screen-skeleton-toggle">
+                <button
+                  id="skeletonToggleButton"
+                  type="button"
+                  aria-label="Show skeleton"
+                  aria-pressed="false"
+                  disabled
+                >
+                  Skeleton: OFF
+                </button>
+              </div>
             </div>
             <div class="device-home-indicator"></div>
           </div>
@@ -138,7 +183,7 @@
           <h2>Screen Test</h2>
         </header>
 
-        <details class="card controls device-focus" open>
+        <details class="card controls device-focus">
           <summary>Device Compare (Primary)</summary>
           <p class="focus-note">Use this first to preview small screens and compare POT/NPOT behavior with mipmaps.</p>
           <p class="focus-tags"><span>Small screen</span><span>POT vs NPOT</span><span>Mipmap check</span></p>
@@ -189,7 +234,7 @@
           </label>
         </details>
 
-        <details class="card controls" open>
+        <details class="card controls">
           <summary>Mipmap</summary>
           <label class="toggle">
             <input id="mipmapToggle" type="checkbox" checked />
@@ -197,18 +242,9 @@
           </label>
           <label class="toggle">
             <input id="potOverrideToggle" type="checkbox" />
-            <span>Manual POT</span>
+            <span>Manual POT (2048 base)</span>
           </label>
-          <div class="pot-row">
-            <label class="field compact">
-              <span>Width</span>
-              <input id="potWidthInput" type="number" min="1" step="1" placeholder="2048" />
-            </label>
-            <label class="field compact">
-              <span>Height</span>
-              <input id="potHeightInput" type="number" min="1" step="1" placeholder="2048" />
-            </label>
-          </div>
+          <p class="hint">Repack NPOT atlas pages into one POT atlas (2048x2048 first, auto-bump if required).</p>
           <div class="button-row">
             <button id="scale025" type="button">0.25x</button>
             <button id="scale05" type="button">0.5x</button>
@@ -217,7 +253,7 @@
           <button id="panToggle" type="button">Pan: OFF</button>
         </details>
 
-        <details class="card statuses" open>
+        <details class="card statuses">
           <summary>Status</summary>
           <p id="potStatus" class="status-line">Texture POT: -</p>
           <p id="renderResolutionTag" class="badge badge-neutral">Render: unknown</p>
@@ -226,6 +262,63 @@
           <p id="perfTag" class="badge badge-neutral">Perf: unknown</p>
           <p id="mipmapBadge" class="badge badge-neutral">Mipmaps status: unknown</p>
           <pre id="verificationPanel" class="panel-log">No GL verification yet.</pre>
+        </details>
+
+        <details id="fbxPreviewCard" class="card is-hidden">
+          <summary>FBX Preview Compare</summary>
+          <p id="fbxPreviewActiveAnimation" class="status-line">Active animation: -</p>
+          <p id="fbxPreviewMeta" class="hint">No FBX preview data loaded.</p>
+          <p id="fbxPreviewEmptyState" class="hint">
+            Select an FBX primary animation to preview skeleton motion.
+          </p>
+          <div class="fbx-preview-surface">
+            <canvas id="fbxPreviewCanvas" width="480" height="300" aria-label="FBX skeleton preview"></canvas>
+          </div>
+          <div class="fbx-preview-grid">
+            <label class="field compact">
+              <span>Source mode</span>
+              <select id="fbxPreviewSourceSelect">
+                <option value="auto" selected>Auto</option>
+                <option value="raw">Raw FBX</option>
+                <option value="spine">Spine fallback</option>
+              </select>
+            </label>
+            <label class="field compact">
+              <span>View mode</span>
+              <select id="fbxPreviewViewSelect">
+                <option value="perspective" selected>Perspective</option>
+                <option value="force2d">Force 2D</option>
+              </select>
+            </label>
+          </div>
+          <div class="fbx-preview-playback">
+            <button id="fbxPreviewPlayPauseButton" type="button">Pause</button>
+            <button id="fbxPreviewResetButton" type="button">Reset</button>
+            <label class="field compact">
+              <span>Speed</span>
+              <select id="fbxPreviewSpeedSelect">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1.0x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2.0x</option>
+              </select>
+            </label>
+          </div>
+          <label class="field compact">
+            <span>Scrub</span>
+            <input id="fbxPreviewScrubber" type="range" min="0" max="1000" step="1" value="0" />
+          </label>
+          <div class="fbx-preview-overlays">
+            <label class="toggle">
+              <input id="fbxPreviewBonesToggle" type="checkbox" checked />
+              <span>Bones</span>
+            </label>
+            <label class="toggle">
+              <input id="fbxPreviewJointsToggle" type="checkbox" checked />
+              <span>Joints</span>
+            </label>
+          </div>
         </details>
 
       </aside>
